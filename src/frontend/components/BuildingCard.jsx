@@ -1,5 +1,6 @@
 import React from 'react';
 import { getColorForIconClass, getIconForResource } from '../constants/iconMaps';
+import { BUILDING_CONFIG } from '../../core/config/buildings.js';
 
 export default function BuildingCard({ b, onOpen, onAssign, onUpgrade, compact = false }) {
   const renderIcon = (icon) => {
@@ -14,19 +15,23 @@ export default function BuildingCard({ b, onOpen, onAssign, onUpgrade, compact =
     return icon;
   };
 
+  const iconClass = b.icon || (BUILDING_CONFIG[b.id] && BUILDING_CONFIG[b.id].icon) || null;
+  const desc = b.description || (BUILDING_CONFIG[b.id] && BUILDING_CONFIG[b.id].description) || 'No description available.';
+
   const isBuilt = b.level && b.level > 0;
-  if (compact) {
+    if (compact) {
     return (
       <div className={`building-card compact ${b.isLocked ? 'locked' : ''}`} style={{ cursor: 'pointer', padding: 10, minWidth: 200 }} onClick={() => onOpen && onOpen(b)}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ width: 40, height: 40, background: 'rgba(0,0,0,0.3)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.06)' }}>
-            {renderIcon(b.icon)}
+            {renderIcon(iconClass)}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <div style={{ fontWeight: 700, color: '#eee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.displayName || b.name}</div>
               {!b.isLocked && <div style={{ fontSize: '0.75rem', color: '#ccc', background: 'rgba(0,0,0,0.35)', padding: '2px 6px', borderRadius: 4 }}>Lvl {b.level || 0}</div>}
             </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 6 }}>{desc.split('.')[0]}{(desc.split('.')[0] || '').length > 0 ? '.' : ''}</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
               {(Object.entries(b.upgradeCost || {})).slice(0,2).map(([res, amt]) => {
                 const def = getIconForResource(res) || { icon: 'fa-box', color: '#bfbfbf' };
@@ -62,7 +67,7 @@ export default function BuildingCard({ b, onOpen, onAssign, onUpgrade, compact =
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{ width: 36, height: 36, background: 'rgba(0,0,0,0.3)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.1)' }}>
-            {renderIcon(b.icon)}
+            {renderIcon(iconClass)}
           </div>
           <div>
             <h3 style={{ margin: 0, fontSize: '1rem', color: '#eee', fontFamily: 'var(--font-header)' }}>
@@ -73,11 +78,12 @@ export default function BuildingCard({ b, onOpen, onAssign, onUpgrade, compact =
               )}
             </h3>
             {b.description && (
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', maxWidth: 220, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', maxWidth: 320, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {(() => {
-                  const first = (b.description || '').split('.')[0];
-                  if (!first) return '';
-                  return first.length > 80 ? first.slice(0, 77) + '...' : first;
+                  const text = desc || '';
+                  const first = text.split('.')[0];
+                  if (!first) return 'No description available.';
+                  return first.length > 120 ? first.slice(0, 117) + '...' : first;
                 })()}
               </div>
             )}

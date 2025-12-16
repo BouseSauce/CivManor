@@ -1,6 +1,10 @@
 import { BUILDING_CONFIG } from '../config/buildings.js';
 import { ResourceEnum } from '../constants/enums.js';
 
+// Configurable ratio used when deriving stone/timber costs for scaling.
+// Interpreted as: Stone = Timber * WOOD_TO_STONE_RATIO
+export const WOOD_TO_STONE_RATIO = 0.5; // default: stone costs half of timber by mass
+
 /**
  * Calculates the cost to upgrade a building to the next level.
  * Implements Universal Formula + T3 Tools Bottleneck.
@@ -24,6 +28,18 @@ export function calculateUpgradeCost(buildingId, currentLevel) {
     for (const [res, amount] of Object.entries(config.baseCost)) {
         cost[res] = Math.floor(amount * Math.pow(gf, currentLevel));
     }
+
+    // If a building defined Timber but no Stone (or vice-versa), derive the missing
+    // resource using `WOOD_TO_STONE_RATIO` so scaling remains consistent.
+    try {
+        const hasTimber = typeof cost[ResourceEnum.Timber] !== 'undefined';
+        const hasStone = typeof cost[ResourceEnum.Stone] !== 'undefined';
+        if (hasTimber && !hasStone) {
+            cost[ResourceEnum.Stone] = Math.max(0, Math.floor(cost[ResourceEnum.Timber] * WOOD_TO_STONE_RATIO));
+        } else if (hasStone && !hasTimber && WOOD_TO_STONE_RATIO > 0) {
+            cost[ResourceEnum.Timber] = Math.max(0, Math.floor(cost[ResourceEnum.Stone] / WOOD_TO_STONE_RATIO));
+        }
+    } catch (e) { /* ignore derivation errors */ }
 
     // 2. T3 Tools Bottleneck
     // If Industry (GF 1.6 or 1.4 in this context, usually Industry/Processing) AND Level >= 10

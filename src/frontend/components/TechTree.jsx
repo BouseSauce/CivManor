@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BUILDING_PREREQS, BUILDING_CONFIG } from '../../core/config/buildings.js';
+import { getIconForResource } from '../constants/iconMaps';
 import { GameClient } from '../api/client';
 
 export default function TechTree() {
@@ -13,14 +14,14 @@ export default function TechTree() {
   });
 
   const techs = Object.keys(techMap);
-  const [researchState, setResearchState] = useState({ researched: [], active: null });
+  const [researchState, setResearchState] = useState({ researched: [], active: null, defs: {} });
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
         const r = await GameClient.getResearch();
-        if (mounted) setResearchState(r || { researched: [], active: null });
+        if (mounted) setResearchState(r || { researched: [], active: null, defs: {} });
       } catch (e) { console.error(e); }
     };
     load();
@@ -47,6 +48,26 @@ export default function TechTree() {
               <div>
                 <div style={{ fontWeight: 'bold' }}>{t}</div>
                 <div style={{ fontSize: 12, color: '#888', marginTop: 6 }}>Unlocks: {techMap[t].map(id => BUILDING_CONFIG[id]?.displayName || id).join(', ')}</div>
+                {/* Show cost and requirements if available from defs */}
+                {researchState.defs && researchState.defs[t] && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {Object.entries(researchState.defs[t].cost || {}).map(([res, amt]) => {
+                      const icon = getIconForResource(res) || { icon: 'fa-box', color: '#bbb' };
+                      return (
+                        <div key={res} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '4px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.02)' }}>
+                          <i className={`fa-solid ${icon.icon}`} style={{ color: icon.color }} />
+                          <div style={{ fontWeight: 700, color: '#ddd' }}>{amt}</div>
+                          <div style={{ color: '#999', fontSize: 12 }}>{res}</div>
+                        </div>
+                      );
+                    })}
+                    {researchState.defs[t].requiredTownLevel && (
+                      <div style={{ padding: '6px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.02)' }}>
+                        <div style={{ fontSize: 12, color: '#e0cda0' }}>Requires TownHall Lvl {researchState.defs[t].requiredTownLevel}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 {researchState.researched && researchState.researched.includes(t) ? (

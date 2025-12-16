@@ -14,12 +14,17 @@ export const SUSTENANCE_PER_POP_PER_SECOND = 20 / 3600;
  * @param {boolean} hasFirewood - If firewood requirement is met
  * @returns {number} - Approval percentage (0-100)
  */
-export function calculateApproval(pop, capacity, foodVariety, taxRate, hasFirewood) {
+export function calculateApproval(pop, capacity, foodVariety, taxRate, hasFirewood, prevApproval = null) {
     let approval = 50; // Base approval
 
-    // 1. Homelessness Penalty
+    // 1. Homelessness Penalty (scaled and much less punishing)
+    // Scale penalty based on overflow ratio so small overflows aren't devastating.
     if (pop > capacity) {
-        approval -= 50; // Severe penalty
+        const overflow = pop - capacity;
+        const ratio = capacity > 0 ? (overflow / capacity) : 1;
+        // Scale penalty to a maximum of 25 (previously a flat 50).
+        const penalty = Math.min(25, Math.ceil(ratio * 25));
+        approval -= penalty;
     }
 
     // 2. Food Variety Bonus (e.g., +5 per type)
@@ -36,8 +41,19 @@ export function calculateApproval(pop, capacity, foodVariety, taxRate, hasFirewo
         approval += 5; // Comfort bonus
     }
 
-    // Clamp 0-100
-    return Math.max(0, Math.min(100, Math.floor(approval)));
+    // Compute raw clamped value before applying rate-limiting
+    let clamped = Math.max(0, Math.min(100, Math.floor(approval)));
+
+    // 5. Rate limit adjustment: if previous approval provided, limit change to +/-2 per recalculation
+    if (typeof prevApproval === 'number' && !isNaN(prevApproval)) {
+        const delta = clamped - prevApproval;
+        if (delta > 2) clamped = prevApproval + 2;
+        else if (delta < -2) clamped = prevApproval - 2;
+        // ensure still within 0-100
+        clamped = Math.max(0, Math.min(100, Math.floor(clamped)));
+    }
+
+    return clamped;
 }
 
 /**
@@ -99,13 +115,18 @@ export function processPopulationTick(pop, foodStocks, approval) {
     }
 
     // 3. Growth/Decline based on Approval
-    if (approval > 75) {
-        // Growth
-        const growth = Math.max(1, Math.floor(pop * 0.02)); // 2% growth
+    // New rule: if approval >= 50%, population grows. Growth scales per 10% above 50%.
+    // - Base growth: 1% at 50%
+    // - For each full 10% above 50 add +1% (e.g., 60% -> 2%, 70% -> 3%, ...)
+    // - Minimum growth is +1 person per tick when growth applies.
+    if (approval >= 50) {
+        const extraTens = Math.floor((approval - 50) / 10); // 0 for 50-59, 1 for 60-69, etc.
+        const growthRate = 0.01 * (1 + Math.max(0, extraTens));
+        const growth = Math.max(1, Math.floor(pop * growthRate));
         newPop += growth;
     } else if (approval < 25) {
-        // Decline
-        const decline = Math.max(1, Math.floor(pop * 0.02)); // 2% leaving
+        // Decline unchanged: 2% leaving
+        const decline = Math.max(1, Math.floor(pop * 0.02));
         newPop -= decline;
     }
 

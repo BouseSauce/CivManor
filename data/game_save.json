@@ -394,7 +394,18 @@
         "cartContents": {}
       },
       "researchedTechs": [],
-      "activeResearch": null
+      "activeResearch": null,
+      "messages": [
+        {
+          "id": "e81fc48e-000f-4024-9f2c-2366a4489791",
+          "from": "868add3a-cd95-42a4-8b8f-a05726511ff2",
+          "to": "671023e8-c467-4ffa-98af-9fe29139d6ec",
+          "subject": "Regarding ELMWOOD",
+          "body": "Teeee",
+          "createdAt": 1765863333785,
+          "read": false
+        }
+      ]
     },
     "c4689773-f8bb-447d-bd66-32b27388a924": {
       "id": "c4689773-f8bb-447d-bd66-32b27388a924",
@@ -502,7 +513,18 @@
         "cartContents": {}
       },
       "researchedTechs": [],
-      "activeResearch": null
+      "activeResearch": null,
+      "messages": [
+        {
+          "id": "1c269823-8f55-4d9c-91f8-98f1e40ac1f8",
+          "from": "30d95d79-1cfd-4429-850a-cabdbb6920bd",
+          "to": "e2a1b715-29c9-41cf-915f-362eca89bb32",
+          "subject": "Regarding STONEFORD",
+          "body": "Direst",
+          "createdAt": 1765862102340,
+          "read": false
+        }
+      ]
     },
     "7b651fed-cdfb-41b0-a7e2-e8925e21e5a4": {
       "id": "7b651fed-cdfb-41b0-a7e2-e8925e21e5a4",
@@ -610,7 +632,18 @@
         "cartContents": {}
       },
       "researchedTechs": [],
-      "activeResearch": null
+      "activeResearch": null,
+      "messages": [
+        {
+          "id": "fc26ceb9-6c3d-430d-be2a-81f5eae2c991",
+          "from": "30d95d79-1cfd-4429-850a-cabdbb6920bd",
+          "to": "70fa22f3-b9a4-43cb-a716-4bd9596d87d1",
+          "subject": "Test",
+          "body": "ETstset",
+          "createdAt": 1765863540774,
+          "read": false
+        }
+      ]
     },
     "85b022ef-9795-4093-9f9d-92a6e56f56ee": {
       "id": "85b022ef-9795-4093-9f9d-92a6e56f56ee",
@@ -922,7 +955,18 @@
         "cartContents": {}
       },
       "researchedTechs": [],
-      "activeResearch": null
+      "activeResearch": null,
+      "messages": [
+        {
+          "id": "37a3e5c6-aec1-4aba-89f6-0d68080a34de",
+          "from": "868add3a-cd95-42a4-8b8f-a05726511ff2",
+          "to": "30d95d79-1cfd-4429-850a-cabdbb6920bd",
+          "subject": "TEst",
+          "body": "TestTest",
+          "createdAt": 1765863561554,
+          "read": false
+        }
+      ]
     },
     "814b9209-7b62-4254-b24b-810ad325c677": {
       "id": "814b9209-7b62-4254-b24b-810ad325c677",
@@ -959,12 +1003,96 @@
       },
       "researchedTechs": [],
       "activeResearch": null
+    },
+    "212b83ba-35c3-4101-8361-9da015036cac": {
+      "id": "212b83ba-35c3-4101-8361-9da015036cac",
+      "username": "Gideon_760",
+      "password": "$2a$10$atbh7MrDmcZ3cQGIBSw0AO4UNfioyNgIYAoGzDzzeOg6i4BuNQs1q",
+      "inventory": {
+        "resources": {
+          "Timber": 0,
+          "Stone": 0,
+          "IronOre": 0,
+          "Coal": 0,
+          "Berries": 0,
+          "Meat": 0,
+          "Fish": 0,
+          "Bread": 0,
+          "Hides": 0,
+          "Leather": 0,
+          "Planks": 0,
+          "Steel": 0,
+          "Tools": 0,
+          "SimpleSpear": 0,
+          "Horse": 0,
+          "Knowledge": 0,
+          "Gold": 0
+        },
+        "units": {
+          "Villager": 0,
+          "Militia": 0,
+          "Spearmen": 0,
+          "Knights": 0,
+          "Trebuchet": 0,
+          "TradeCart": 1,
+          "Scout": 0
+        },
+        "cartContents": {
+          "Timber": 200,
+          "Stone": 50,
+          "Meat": 150,
+          "Berries": 150,
+          "Planks": 20
+        }
+      },
+      "researchedTechs": [],
+      "activeResearch": null,
+      "messages": []
+    },
+    "868add3a-cd95-42a4-8b8f-a05726511ff2": {
+      "id": "868add3a-cd95-42a4-8b8f-a05726511ff2",
+      "username": "Beatrice_896",
+      "password": "$2a$10$aeCeCal0qj0PilMdd0q7m.s1ABdmNywC.MG.BwqD0aNG9ZjAMx4qK",
+      "inventory": {
+        "resources": {
+          "Timber": 0,
+          "Stone": 0,
+          "IronOre": 0,
+          "Coal": 0,
+          "Berries": 0,
+          "Meat": 0,
+          "Fish": 0,
+          "Bread": 0,
+          "Hides": 0,
+          "Leather": 0,
+          "Planks": 0,
+          "Steel": 0,
+          "Tools": 0,
+          "SimpleSpear": 0,
+          "Horse": 0,
+          "Knowledge": 0,
+          "Gold": 0
+        },
+        "units": {
+          "Villager": 0,
+          "Militia": 0,
+          "Spearmen": 0,
+          "Knights": 0,
+          "Trebuchet": 0,
+          "TradeCart": 0,
+          "Scout": 0
+        },
+        "cartContents": {}
+      },
+      "researchedTechs": [],
+      "activeResearch": null,
+      "messages": []
     }
   },
   "areaStates": {
     "R3:A3": {
       "name": "MOUNTBRAY",
-      "tickCount": 11472,
+      "tickCount": 17005,
       "resources": {
         "Timber": 100,
         "Stone": 0,
@@ -982,10 +1110,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1015,14 +1143,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R7:A4": {
       "name": "NARROWFORD",
-      "tickCount": 11463,
+      "tickCount": 16996,
       "resources": {
         "Timber": 100,
         "Stone": 0,
@@ -1040,10 +1168,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1073,14 +1201,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R1:A1": {
       "name": "IRON FORGE",
-      "tickCount": 11461,
+      "tickCount": 16994,
       "resources": {
         "Timber": 100,
         "Stone": 0,
@@ -1098,10 +1226,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1131,14 +1259,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R1:A2": {
       "name": "BIRCH HOLLOW",
-      "tickCount": 11461,
+      "tickCount": 16994,
       "resources": {
         "Timber": 100,
         "Stone": 0,
@@ -1156,10 +1284,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1189,14 +1317,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R1:A3": {
       "name": "SILVER GLEN",
-      "tickCount": 11458,
+      "tickCount": 16991,
       "resources": {
         "Timber": 100,
         "Stone": 0,
@@ -1214,10 +1342,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1247,14 +1375,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R1:A4": {
       "name": "STONEFORD",
-      "tickCount": 11440,
+      "tickCount": 16973,
       "resources": {
         "Timber": 100,
         "Stone": 0,
@@ -1272,10 +1400,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1305,23 +1433,23 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R1:A5": {
       "name": "RAVENFORD",
-      "tickCount": 11430,
+      "tickCount": 16963,
       "resources": {
         "Timber": 7748,
         "Stone": 3,
         "IronOre": 0,
         "Coal": 0,
         "Berries": 0,
-        "Meat": 8731.88333333336,
+        "Meat": 8691.527777778392,
         "Fish": 0,
-        "Bread": 2499.9999999999977,
+        "Bread": 3827.9199999997386,
         "Planks": 20,
         "Steel": 0,
         "Tools": 0,
@@ -1330,10 +1458,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 13,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 65,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 2,
@@ -1363,14 +1491,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 8
       },
       "assignments": {},
       "queue": []
     },
     "R9:A2": {
       "name": "BIRCH HOLLOW",
-      "tickCount": 9900,
+      "tickCount": 15433,
       "resources": {
         "Timber": 200,
         "Stone": 50,
@@ -1388,10 +1516,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1422,14 +1550,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R3:A4": {
       "name": "NARROWFORD",
-      "tickCount": 9510,
+      "tickCount": 15043,
       "resources": {
         "Timber": 200,
         "Stone": 50,
@@ -1447,10 +1575,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1481,14 +1609,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R4:A3": {
       "name": "RIVERDALE",
-      "tickCount": 8700,
+      "tickCount": 14233,
       "resources": {
         "Timber": 200,
         "Stone": 50,
@@ -1506,10 +1634,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1540,14 +1668,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R1:A7": {
       "name": "ELMWOOD",
-      "tickCount": 8340,
+      "tickCount": 13873,
       "resources": {
         "Timber": 200,
         "Stone": 50,
@@ -1565,10 +1693,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1599,14 +1727,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R9:A4": {
       "name": "STONEFORD",
-      "tickCount": 8040,
+      "tickCount": 13573,
       "resources": {
         "Timber": 200,
         "Stone": 50,
@@ -1624,10 +1752,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1658,14 +1786,14 @@
         "Trebuchet": 0,
         "TradeCart": 0,
         "Scout": 0,
-        "Villager": 0
+        "Villager": 3
       },
       "assignments": {},
       "queue": []
     },
     "R1:A9": {
       "name": "GRANITE RIDGE",
-      "tickCount": 6420,
+      "tickCount": 11953,
       "resources": {
         "Timber": 200,
         "Stone": 50,
@@ -1683,10 +1811,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 0,
@@ -1710,7 +1838,7 @@
         "DiplomaticQuarter": 0
       },
       "units": {
-        "Villager": 36,
+        "Villager": 39,
         "Militia": 0,
         "Spearmen": 0,
         "Knights": 0,
@@ -1723,7 +1851,7 @@
     },
     "R5:A4": {
       "name": "STONEFORD",
-      "tickCount": 6390,
+      "tickCount": 11923,
       "resources": {
         "Timber": 1915,
         "Stone": 310.7999999999999,
@@ -1741,10 +1869,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 1,
@@ -1768,7 +1896,7 @@
         "DiplomaticQuarter": 0
       },
       "units": {
-        "Villager": 36,
+        "Villager": 39,
         "Militia": 0,
         "Spearmen": 0,
         "Knights": 0,
@@ -1781,14 +1909,14 @@
     },
     "R3:A6": {
       "name": "PINEHAVEN",
-      "tickCount": 5760,
+      "tickCount": 11293,
       "resources": {
-        "Timber": 1932.3999999999924,
+        "Timber": 2596.359999999863,
         "Stone": 265.20000000000033,
         "IronOre": 0,
         "Coal": 0,
         "Berries": 0,
-        "Meat": 315.90000000000015,
+        "Meat": 1166.6883333334017,
         "Fish": 0,
         "Bread": 0,
         "Planks": 20,
@@ -1800,10 +1928,10 @@
         "Gold": 0,
         "Hides": null
       },
-      "population": 5,
+      "population": 11,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 60,
+      "approval": 35,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 1,
@@ -1827,7 +1955,7 @@
         "DiplomaticQuarter": 0
       },
       "units": {
-        "Villager": 17,
+        "Villager": 23,
         "Militia": 0,
         "Spearmen": 0,
         "Knights": 0,
@@ -1843,14 +1971,14 @@
     },
     "R1:A6": {
       "name": "BRAMBLE COVE",
-      "tickCount": 5310,
+      "tickCount": 10843,
       "resources": {
         "Timber": 2342,
-        "Stone": 657.6000000000006,
+        "Stone": 1210.899999999904,
         "IronOre": 0,
         "Coal": 0,
         "Berries": 0,
-        "Meat": 315.90000000000015,
+        "Meat": 1166.6883333334017,
         "Fish": 0,
         "Bread": 0,
         "Planks": 20,
@@ -1862,10 +1990,10 @@
         "Gold": 0,
         "Hides": null
       },
-      "population": 5,
+      "population": 11,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 60,
+      "approval": 35,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 2,
@@ -1889,7 +2017,7 @@
         "DiplomaticQuarter": 0
       },
       "units": {
-        "Villager": 5,
+        "Villager": 11,
         "Militia": 0,
         "Spearmen": 0,
         "Knights": 0,
@@ -1905,14 +2033,14 @@
     },
     "R12:A6": {
       "name": "IRON FORGE",
-      "tickCount": 4500,
+      "tickCount": 10033,
       "resources": {
         "Timber": 2145.7999999999993,
         "Stone": 560.7000000000002,
         "IronOre": 0,
         "Coal": 0,
-        "Berries": 2201.3333333333326,
-        "Meat": 5409.6,
+        "Berries": 5440.422222222769,
+        "Meat": 5420.6,
         "Fish": 0,
         "Bread": 0,
         "Planks": 20,
@@ -1924,10 +2052,10 @@
         "Gold": 0,
         "Hides": null
       },
-      "population": 5,
+      "population": 13,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 65,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 2,
@@ -1951,7 +2079,7 @@
         "DiplomaticQuarter": 0
       },
       "units": {
-        "Villager": 5,
+        "Villager": 13,
         "Militia": 0,
         "Spearmen": 0,
         "Knights": 0,
@@ -1966,7 +2094,7 @@
     },
     "R6:A5": {
       "name": "HAVEN",
-      "tickCount": 4020,
+      "tickCount": 9553,
       "resources": {
         "Timber": 775,
         "Stone": 142.80000000000015,
@@ -1984,10 +2112,10 @@
         "Knowledge": 0,
         "Gold": 0
       },
-      "population": 5,
+      "population": 8,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 55,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 1,
@@ -2011,7 +2139,7 @@
         "DiplomaticQuarter": 0
       },
       "units": {
-        "Villager": 5,
+        "Villager": 8,
         "Militia": 0,
         "Spearmen": 0,
         "Knights": 0,
@@ -2024,14 +2152,14 @@
     },
     "R1:A8": {
       "name": "FOXWELL",
-      "tickCount": 3780,
+      "tickCount": 9313,
       "resources": {
-        "Timber": 1248.799999999997,
-        "Stone": 163.50000000000009,
+        "Timber": 1912.7599999998674,
+        "Stone": 440.1500000000122,
         "IronOre": 0,
         "Coal": 0,
-        "Berries": 58.48333333333328,
-        "Meat": 316.80000000000007,
+        "Berries": 309.7522222222559,
+        "Meat": 2088.359999999956,
         "Fish": 0,
         "Bread": 0,
         "Planks": 20,
@@ -2043,10 +2171,10 @@
         "Gold": 0,
         "Hides": null
       },
-      "population": 5,
+      "population": 13,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 65,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 2,
@@ -2070,7 +2198,7 @@
         "DiplomaticQuarter": 0
       },
       "units": {
-        "Villager": 5,
+        "Villager": 13,
         "Militia": 0,
         "Spearmen": 0,
         "Knights": 0,
@@ -2088,14 +2216,14 @@
     },
     "R11:A7": {
       "name": "QUARRYEND",
-      "tickCount": 3780,
+      "tickCount": 9313,
       "resources": {
-        "Timber": 701.1999999999985,
-        "Stone": 247.2000000000001,
+        "Timber": 1033.1799999999337,
+        "Stone": 523.8499999999987,
         "IronOre": 0,
         "Coal": 0,
-        "Berries": 101.20000000000005,
-        "Meat": 295.2999999999999,
+        "Berries": 352.46888888892306,
+        "Meat": 739.9400000000401,
         "Fish": 0,
         "Bread": 0,
         "Planks": 20,
@@ -2107,10 +2235,10 @@
         "Gold": 0,
         "Hides": null
       },
-      "population": 5,
+      "population": 13,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 65,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 1,
@@ -2134,7 +2262,7 @@
         "DiplomaticQuarter": 0
       },
       "units": {
-        "Villager": 5,
+        "Villager": 13,
         "Militia": 0,
         "Spearmen": 0,
         "Knights": 0,
@@ -2152,14 +2280,14 @@
     },
     "R11:A6": {
       "name": "PINEHAVEN",
-      "tickCount": 3480,
+      "tickCount": 9013,
       "resources": {
-        "Timber": 496,
-        "Stone": 95.39999999999993,
+        "Timber": 584.0000000000115,
+        "Stone": 1322.6999999999518,
         "IronOre": 0,
         "Coal": 0,
-        "Berries": 1360.7666666666655,
-        "Meat": 3376.9999999999995,
+        "Berries": 1515.359999999926,
+        "Meat": 5834.199999999817,
         "Fish": 0,
         "Bread": 0,
         "Planks": 20,
@@ -2171,20 +2299,20 @@
         "Gold": 0,
         "Hides": null
       },
-      "population": 5,
-      "housingCapacity": 5,
+      "population": 33,
+      "housingCapacity": 20,
       "taxRate": 0,
-      "approval": 65,
+      "approval": 48,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 2,
         "Farmhouse": 0,
         "ForagersHut": 3,
-        "HuntingLodge": 3,
+        "HuntingLodge": 4,
         "StonePit": 2,
         "Storehouse": 0,
         "Granary": 0,
-        "TownHall": 0,
+        "TownHall": 1,
         "TradeBroker": 0,
         "WagonWorkshop": 0,
         "Sawpit": 0,
@@ -2198,7 +2326,7 @@
         "DiplomaticQuarter": 0
       },
       "units": {
-        "Villager": 5,
+        "Villager": 33,
         "Militia": 0,
         "Spearmen": 0,
         "Knights": 0,
@@ -2207,19 +2335,22 @@
         "Scout": 0
       },
       "assignments": {
-        "HuntingLodge": 5
+        "HuntingLodge": 9,
+        "StonePit": 3,
+        "LoggingCamp": 6,
+        "ForagersHut": 7
       },
       "queue": []
     },
     "R7:A5": {
       "name": "OLDBRIDGE",
-      "tickCount": 1710,
+      "tickCount": 7243,
       "resources": {
-        "Timber": 306.9999999999997,
-        "Stone": 293,
+        "Timber": 1302.940000000066,
+        "Stone": 2506.2000000000967,
         "IronOre": 0,
         "Coal": 0,
-        "Berries": 381.9944444444445,
+        "Berries": 301.28333333336366,
         "Meat": 425.60000000000025,
         "Fish": 0,
         "Bread": 0,
@@ -2232,10 +2363,10 @@
         "Gold": 0,
         "Hides": null
       },
-      "population": 5,
+      "population": 13,
       "housingCapacity": 5,
       "taxRate": 0,
-      "approval": 65,
+      "approval": 40,
       "hasFirewood": true,
       "buildings": {
         "LoggingCamp": 3,
@@ -2259,7 +2390,7 @@
         "DiplomaticQuarter": 0
       },
       "units": {
-        "Villager": 5,
+        "Villager": 13,
         "Militia": 0,
         "Spearmen": 0,
         "Knights": 0,
@@ -2270,6 +2401,71 @@
       "assignments": {
         "LoggingCamp": 1,
         "StonePit": 4
+      },
+      "queue": []
+    },
+    "R1:A10": {
+      "name": "HAVEN",
+      "tickCount": 1753,
+      "resources": {
+        "Timber": 804.1600000000083,
+        "Stone": 1242.7000000000246,
+        "IronOre": 0,
+        "Coal": 0,
+        "Berries": 1083.3455555555888,
+        "Meat": 1315.2800000000204,
+        "Fish": 0,
+        "Bread": 0,
+        "Hides": 0,
+        "Leather": 0,
+        "Planks": 20,
+        "Steel": 0,
+        "Tools": 0,
+        "SimpleSpear": 0,
+        "Horse": 0,
+        "Knowledge": 0,
+        "Gold": 0
+      },
+      "population": 24,
+      "housingCapacity": 5,
+      "taxRate": 0,
+      "approval": 40,
+      "hasFirewood": true,
+      "buildings": {
+        "LoggingCamp": 3,
+        "Farmhouse": 0,
+        "ForagersHut": 4,
+        "HuntingLodge": 3,
+        "StonePit": 4,
+        "Storehouse": 0,
+        "Granary": 0,
+        "TownHall": 0,
+        "TradeBroker": 0,
+        "WagonWorkshop": 0,
+        "Sawpit": 0,
+        "Tannery": 0,
+        "Smithy": 0,
+        "DeepMine": 0,
+        "Bloomery": 0,
+        "University": 0,
+        "BlastFurnace": 0,
+        "SiegeWorkshop": 0,
+        "DiplomaticQuarter": 0
+      },
+      "units": {
+        "Villager": 24,
+        "Militia": 0,
+        "Spearmen": 0,
+        "Knights": 0,
+        "Trebuchet": 0,
+        "TradeCart": 0,
+        "Scout": 0
+      },
+      "assignments": {
+        "ForagersHut": 4,
+        "HuntingLodge": 4,
+        "LoggingCamp": 6,
+        "StonePit": 6
       },
       "queue": []
     }
@@ -2284,7 +2480,7 @@
     "R1:A7": "671023e8-c467-4ffa-98af-9fe29139d6ec",
     "R1:A8": "039c2907-883b-4c7c-aa67-99eb48eacf38",
     "R1:A9": "d1da97e4-f8fc-4c5f-8709-f926dd8559ca",
-    "R1:A10": null,
+    "R1:A10": "868add3a-cd95-42a4-8b8f-a05726511ff2",
     "R1:A11": null,
     "R1:A12": null,
     "R1:A13": null,

@@ -72,14 +72,55 @@ export const GameClient = {
     },
 
     async getArea(areaId) {
-        return await this.authFetch(`/area/${areaId}`, { method: 'GET' });
-    }
+        const resp = await this.authFetch(`/area/${areaId}`, { method: 'GET' });
+        try {
+            if (typeof window !== 'undefined' && resp) {
+                // Allow listeners to detect population changes by including prevPopulation
+                const prev = window.__lastFetchedArea && window.__lastFetchedArea[resp.id] ? window.__lastFetchedArea[resp.id].population : null;
+                window.dispatchEvent(new CustomEvent('area:fetched', { detail: { area: resp, prevPopulation: prev } }));
+                window.__lastFetchedArea = window.__lastFetchedArea || {};
+                window.__lastFetchedArea[resp.id] = resp;
+            }
+        } catch (e) { /* ignore */ }
+        return resp;
+    },
 
-    ,
+    async sendMessage(toUserId, subject, body) {
+        const resp = await this.authFetch('/messages/send', { method: 'POST', body: JSON.stringify({ toUserId, subject, body }) });
+        try {
+            if (typeof window !== 'undefined' && resp) {
+                window.dispatchEvent(new CustomEvent('message:notif', { detail: { text: `Message sent to ${toUserId}` } }));
+            }
+        } catch (e) {}
+        return resp;
+    },
+
+    async getInbox() {
+        return await this.authFetch('/messages/inbox', { method: 'GET' });
+    },
+
+    async getSent() {
+        return await this.authFetch('/messages/sent', { method: 'GET' });
+    },
+
+    async listUsers() {
+        return await this.authFetch('/users', { method: 'GET' });
+    },
+
+    async markMessageRead(messageId) {
+        return await this.authFetch('/messages/mark-read', { method: 'POST', body: JSON.stringify({ messageId }) });
+    },
+
     async assignWorkers(areaId, buildingId, count) {
-        return await this.authFetch(`/area/${areaId}/assign`, { method: 'POST', body: JSON.stringify({ buildingId, count }) });
-    }
-  ,
+        const resp = await this.authFetch(`/area/${areaId}/assign`, { method: 'POST', body: JSON.stringify({ buildingId, count }) });
+        try {
+            if (typeof window !== 'undefined' && resp) {
+                window.dispatchEvent(new CustomEvent('area:updated', { detail: { areaId, assignments: resp.assignments, units: resp.units } }));
+            }
+        } catch (e) { /* ignore */ }
+        return resp;
+    },
+
     async claimArea(areaId, name) {
         const body = name ? { name } : {};
         return await this.authFetch(`/area/${areaId}/claim`, { method: 'POST', body: JSON.stringify(body) });
@@ -87,20 +128,26 @@ export const GameClient = {
 
     async upgradeArea(areaId, buildingId) {
         return await this.authFetch(`/area/${areaId}/upgrade`, { method: 'POST', body: JSON.stringify({ buildingId }) });
-    }
-,
+    },
+
     // New: fetch authenticated account info (id, username, inventory)
     async getAccount() {
         return await this.authFetch('/account', { method: 'GET' });
-    }
-    ,
+    },
+
     async getResearch() {
         return await this.authFetch('/research', { method: 'GET' });
     },
+
     async startResearch(techId) {
-        return await this.authFetch('/research/start', { method: 'POST', body: JSON.stringify({ techId }) });
+        const resp = await this.authFetch('/research/start', { method: 'POST', body: JSON.stringify({ techId }) });
+        try { if (typeof window !== 'undefined' && resp) window.dispatchEvent(new CustomEvent('research:notif', { detail: { text: `Research started: ${techId}` } })); } catch(e){}
+        return resp;
     },
+
     async completeResearch() {
-        return await this.authFetch('/research/complete', { method: 'POST' });
+        const resp = await this.authFetch('/research/complete', { method: 'POST' });
+        try { if (typeof window !== 'undefined' && resp) window.dispatchEvent(new CustomEvent('research:notif', { detail: { text: `Research complete` } })); } catch(e){}
+        return resp;
     }
 };

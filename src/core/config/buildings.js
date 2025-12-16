@@ -35,10 +35,13 @@ export const BUILDING_CONFIG = {
     HuntingLodge: {
         id: 'HuntingLodge', name: 'Hunting Lodge', displayName: 'Hunting Lodge', icon: 'fa-solid fa-dog', tier: 1, resourceTier: 'Food',
         category: 'Gathering', tags: ['gathering','food','meat'],
-        description: 'Assign villagers to hunt game for meat; higher yield but requires more workers.',
+        description: 'Assign villagers to hunt game for meat; higher yield but requires more workers. Advanced hunting techniques unlock hides at higher lodge levels.',
         growthFactor: 1.2, baseBuildTimeMinutes: 8,
         baseCost: { [ResourceEnum.Timber]: 40, [ResourceEnum.Stone]: 10 },
-        unlocks: ['Meat', 'Hides']
+        // Meat is available immediately; hides are unlocked once Hunting Lodge reaches level 5
+        unlocks: ['Meat'],
+        // levelUnlocks maps resource -> minimum building level required to unlock that resource
+        levelUnlocks: { Hides: 5 }
     },
     StonePit: {
         id: 'StonePit', name: 'Stone Pit', displayName: 'Stone Pit', icon: 'fa-solid fa-mountain', tier: 1, resourceTier: 'T1',
@@ -74,7 +77,9 @@ export const BUILDING_CONFIG = {
         growthFactor: 1.5, baseBuildTimeMinutes: 60,
         baseCost: { [ResourceEnum.Timber]: 500, [ResourceEnum.Stone]: 500 },
         unlocks: ['Administration'],
-        relatedTechs: ['CivicManagement','Administration'],
+        // Settlement-level related techs (e.g., early civic/production techs)
+        // Make Basic Tools available from the Settlement (TownHall)
+        relatedTechs: ['CivicManagement','Administration','Basic Tools'],
         // Leveled display names for settlement growth (index = level)
         levelNames: [
             'Camp Ground',      // level 0 (not built)
@@ -194,6 +199,8 @@ export const BUILDING_CONFIG = {
         relatedTechs: ['Diplomacy']
     }
 };
+
+// (No automatic normalization of baseCost — timber/stone values remain as declared)
 
 /**
  * BUILDING_PREREQS links buildings to either building-level prerequisites or technology prerequisites.

@@ -6,6 +6,7 @@ export default function RegionView({ region, onBack, onViewArea, onClaim, user }
   const [previewFor, setPreviewFor] = useState(null);
   const [claiming, setClaiming] = useState(null);
   const [claimModal, setClaimModal] = useState(null); // { area, name, loading }
+  const [messageModal, setMessageModal] = useState(null); // { area, toUserId, toName, subject, body, sending }
 
   if (!region) return null;
   return (
@@ -25,7 +26,10 @@ export default function RegionView({ region, onBack, onViewArea, onClaim, user }
             <div style={{ marginTop: 8 }}>{a.ownerId ? `Owner: ${a.ownerName || a.ownerId}` : 'Unowned'}</div>
             <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
               {a.ownerId ? (
-                <button className="btn" onClick={() => onViewArea(a.id, a.ownerId)}>View</button>
+                <>
+                  <button className="btn" onClick={() => onViewArea(a.id, a.ownerId)}>View</button>
+                  <button className="btn" onClick={() => setMessageModal({ area: a, toUserId: a.ownerId, toName: a.ownerName || a.ownerId, subject: `Regarding ${a.name}`, body: '', sending: false })}>Message</button>
+                </>
               ) : (
                 (() => {
                   const cartCount = (user && user.inventory && user.inventory.units && user.inventory.units.TradeCart) || 0;
@@ -119,6 +123,41 @@ export default function RegionView({ region, onBack, onViewArea, onClaim, user }
             </div>
             <div style={{ marginTop: 12 }}>
               <BuildingPreview />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {messageModal && (
+        <div className="overlay">
+          <div className="overlay-content panel" style={{ maxWidth: 560 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Message {messageModal.toName}</h3>
+              <button className="btn" onClick={() => setMessageModal(null)}>Close</button>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <div style={{ marginBottom: 8 }}><strong>To:</strong> {messageModal.toName}</div>
+              <div style={{ marginBottom: 8 }}>
+                <input placeholder="Subject" value={messageModal.subject} onChange={e => setMessageModal({ ...messageModal, subject: e.target.value })} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <textarea placeholder="Message body" value={messageModal.body} onChange={e => setMessageModal({ ...messageModal, body: e.target.value })} style={{ width: '100%', minHeight: 120 }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+                <button className="btn" onClick={() => setMessageModal(null)}>Cancel</button>
+                <button className="btn btn-primary" disabled={messageModal.sending} onClick={async () => {
+                  try {
+                    setMessageModal({ ...messageModal, sending: true });
+                    await GameClient.sendMessage(messageModal.toUserId, messageModal.subject, messageModal.body);
+                    alert('Message sent');
+                    setMessageModal(null);
+                  } catch (err) {
+                    console.error('Send message failed', err);
+                    alert(err && err.message ? err.message : 'Failed to send message');
+                    setMessageModal({ ...messageModal, sending: false });
+                  }
+                }}>Send</button>
+              </div>
             </div>
           </div>
         </div>

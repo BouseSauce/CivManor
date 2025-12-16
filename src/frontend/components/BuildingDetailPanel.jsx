@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { getColorForIconClass, getIconForResource } from '../constants/iconMaps';
+import { BUILDING_CONFIG } from '../../core/config/buildings.js';
 import { GameClient } from '../api/client';
 import { useState, useEffect } from 'react';
 
@@ -20,6 +21,7 @@ export default function BuildingDetailPanel({ building, onClose, onAssignVillage
   const isLocked = !!building.isLocked; // prereqs locked
   const notBuilt = level < 1;
   const maxAssigned = Math.floor(3 + (level * 1.5));
+  const disallowAssignments = building.id === 'TownHall' || (building.tags && building.tags.includes('housing'));
   const buildLabel = level > 0 ? 'Upgrade' : 'Build';
   const [upgradeSecs, setUpgradeSecs] = useState((building && building.upgradeSecondsRemaining) || null);
   const [localAssigned, setLocalAssigned] = useState(building.assigned || 0);
@@ -28,6 +30,22 @@ export default function BuildingDetailPanel({ building, onClose, onAssignVillage
   useEffect(() => {
     setLocalAssigned(building.assigned || 0);
   }, [building && building.assigned]);
+
+  // Listen for area updates (assignments/units) so the detail panel updates without full refresh
+  useEffect(() => {
+    const cb = (e) => {
+      try {
+        const d = e && e.detail;
+        if (!d) return;
+        // If the updated assignments include this building, refresh localAssigned
+        if (d.assignments && typeof d.assignments[building.id] !== 'undefined') {
+          setLocalAssigned(d.assignments[building.id] || 0);
+        }
+      } catch (err) { /* ignore */ }
+    };
+    window.addEventListener('area:updated', cb);
+    return () => window.removeEventListener('area:updated', cb);
+  }, [building && building.id]);
 
   useEffect(() => {
     setUpgradeSecs((building && (typeof building.upgradeSecondsRemaining !== 'undefined')) ? building.upgradeSecondsRemaining : null);
@@ -49,7 +67,10 @@ export default function BuildingDetailPanel({ building, onClose, onAssignVillage
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <div style={{ width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.25)', borderRadius: 6 }}>
-              {renderIcon(building.icon)}
+              {(() => {
+                const iconClass = building.icon || (BUILDING_CONFIG[building.id] && BUILDING_CONFIG[building.id].icon) || null;
+                return renderIcon(iconClass);
+              })()}
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -92,7 +113,7 @@ export default function BuildingDetailPanel({ building, onClose, onAssignVillage
           <button className="btn" onClick={onClose} style={{ padding: '6px 8px' }}><i className="fa-solid fa-xmark"></i></button>
         </div>
 
-        <div style={{ color: '#ddd', marginBottom: 10 }}>{building.description || 'No description available.'}</div>
+        <div style={{ color: '#ddd', marginBottom: 10 }}>{building.description || (BUILDING_CONFIG[building.id] && BUILDING_CONFIG[building.id].description) || 'No description available.'}</div>
 
         {/* Related Research */}
         {building.relatedTechs && building.relatedTechs.length > 0 && (
@@ -168,14 +189,14 @@ export default function BuildingDetailPanel({ building, onClose, onAssignVillage
         <div style={{ marginTop: 8 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Assigned Villagers</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-            <button className="btn" disabled={(isLocked || notBuilt) || (localAssigned || 0) <= 0} title={(isLocked || notBuilt) ? 'Cannot assign workers to locked or unbuilt buildings' : ''} onClick={async () => {
+            <button className="btn" disabled={(isLocked || notBuilt || disallowAssignments) || (localAssigned || 0) <= 0} title={(isLocked || notBuilt) ? 'Cannot assign workers to locked or unbuilt buildings' : (disallowAssignments ? 'Cannot assign villagers to the Settlement/Town Hall' : '')} onClick={async () => {
                 if (isLocked || notBuilt) return;
                 const next = Math.max(0, (localAssigned || 0) - 1);
                 setLocalAssigned(next);
                 try { if (onAssignVillagers) await onAssignVillagers(building.id, next); } catch (e) { setLocalAssigned(building.assigned || 0); }
             }}>-</button>
             <div style={{ minWidth: 80, textAlign: 'center', fontWeight: 700 }}>{(localAssigned || 0)} / {maxAssigned}</div>
-            <button className="btn" disabled={(isLocked || notBuilt) || (localAssigned || 0) >= maxAssigned} title={(isLocked || notBuilt) ? 'Cannot assign workers to locked or unbuilt buildings' : ''} onClick={async () => {
+            <button className="btn" disabled={(isLocked || notBuilt || disallowAssignments) || (localAssigned || 0) >= maxAssigned} title={(isLocked || notBuilt) ? 'Cannot assign workers to locked or unbuilt buildings' : (disallowAssignments ? 'Cannot assign villagers to the Settlement/Town Hall' : '')} onClick={async () => {
                 if (isLocked || notBuilt) return;
                 const next = Math.min(maxAssigned, (localAssigned || 0) + 1);
                 if (next === (localAssigned || 0)) return;
@@ -183,7 +204,7 @@ export default function BuildingDetailPanel({ building, onClose, onAssignVillage
                 try { if (onAssignVillagers) await onAssignVillagers(building.id, next); } catch (e) { setLocalAssigned(building.assigned || 0); }
             }}>+</button>
           </div>
-          {(isLocked || notBuilt) && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>This building is {notBuilt ? 'not yet constructed' : 'locked'} — assignments and research are unavailable.</div>}
+          {(isLocked || notBuilt || disallowAssignments) && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>This building is {notBuilt ? 'not yet constructed' : isLocked ? 'locked' : 'a settlement'} — assignments and research are unavailable.</div>}
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Max per building: {maxAssigned} (3 + level × 1.5)</div>
 
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>Upgrade

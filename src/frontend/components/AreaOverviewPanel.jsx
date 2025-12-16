@@ -11,7 +11,14 @@ const AreaOverviewPanel = ({ areaId, areaName, coordinates, stats = {}, queue = 
     const [assigning, setAssigning] = useState(false);
     const [secondsMap, setSecondsMap] = useState({});
 
-    const villagersCount = (units && units.find(u => u.type === 'Villager') || { count: 0 }).count;
+    const [localUnits, setLocalUnits] = useState(units || []);
+
+    // Keep localUnits in sync when parent provides new units
+    useEffect(() => {
+        setLocalUnits(units || []);
+    }, [units]);
+
+    const villagersCount = (localUnits && localUnits.find(u => u.type === 'Villager') || { count: 0 }).count;
     const totalAssigned = Object.values(localAssignments).reduce((a,b) => a + b, 0);
 
     const changeAssignment = async (buildingId, delta) => {
@@ -24,20 +31,30 @@ const AreaOverviewPanel = ({ areaId, areaName, coordinates, stats = {}, queue = 
         if (next === 0) delete updated[buildingId];
         setLocalAssignments(updated);
 
-        // Send to server
+        // Send to server and update local state using server response for immediate UI feedback
         try {
             setAssigning(true);
-            await GameClient.assignWorkers(areaId, buildingId, next);
+            const resp = await GameClient.assignWorkers(areaId, buildingId, next);
+            // resp should include updated assignments and units
+            if (resp && resp.assignments) setLocalAssignments(resp.assignments);
+            else setLocalAssignments(assignments || {});
+            if (resp && resp.units) setLocalUnits(resp.units);
             if (typeof onRefresh === 'function') onRefresh();
         } catch (err) {
             // revert on error
             setLocalAssignments(assignments || {});
+            setLocalUnits(units || []);
             console.error('Assign failed', err);
             alert(err && err.message ? err.message : 'Assign failed');
         } finally {
             setAssigning(false);
         }
     };
+
+    // Keep localAssignments in sync when parent provides new assignments (after refresh)
+    useEffect(() => {
+        setLocalAssignments(assignments || {});
+    }, [assignments]);
 
     const findBuildingLevel = (id) => {
         const b = (buildings || []).find(x => x.id === id);

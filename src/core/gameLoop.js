@@ -116,7 +116,10 @@ function calculateProduction(state) {
     const huntingAssigned = state.assignments['HuntingLodge'] || 0;
     if (huntingLevel > 0 && huntingAssigned > 0) {
         production[ResourceEnum.Meat] = (production[ResourceEnum.Meat] || 0) + (RATES.meatPerWorkerPerSecond * huntingLevel * huntingAssigned * seconds);
-        production[ResourceEnum.Hides] = (production[ResourceEnum.Hides] || 0) + (RATES.hidesPerWorkerPerSecond * huntingLevel * huntingAssigned * seconds);
+        // Hides are an advanced output unlocked at Hunting Lodge level 5
+        if (huntingLevel >= 5) {
+            production[ResourceEnum.Hides] = (production[ResourceEnum.Hides] || 0) + (RATES.hidesPerWorkerPerSecond * huntingLevel * huntingAssigned * seconds);
+        }
     }
 
     return production;
@@ -149,7 +152,8 @@ export function processTick(state, seconds = 1) {
         state.housingCapacity,
         foodVariety,
         state.taxRate,
-        state.hasFirewood
+        state.hasFirewood,
+        state.approval // pass previous approval so changes are rate-limited
     );
 
     // 3. Process Population (Consumption & Growth)

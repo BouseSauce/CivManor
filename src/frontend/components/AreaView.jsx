@@ -7,6 +7,7 @@ import GatheringPanel from './GatheringPanel';
 import EconomyPanel from './EconomyPanel';
 import ResourceRow from './ResourceRow';
 import ResearchStrip from './ResearchStrip';
+import ResearchPanel from './ResearchPanel';
 
 export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parentRefresh }) {
   const [tab, setTab] = useState('overview'); // overview, military, economy
@@ -46,6 +47,9 @@ export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parent
           </button>
           <button className={`btn ${tab === 'economy' ? 'btn-primary' : ''}`} onClick={() => setTab('economy')}>
             <i className="fa-solid fa-coins" style={{ marginRight: 8 }}></i>Economy
+          </button>
+          <button className={`btn ${tab === 'research' ? 'btn-primary' : ''}`} onClick={() => setTab('research')}>
+            <i className="fa-solid fa-flask" style={{ marginRight: 8 }}></i>Research
           </button>
         </div>
       </div>
@@ -108,6 +112,9 @@ export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parent
 
         {tab === 'economy' && (
           <EconomyPanel buildings={area.buildings.filter(b => b.category === 'Economy' || b.tags?.includes('economy'))} onUpgrade={onUpgrade} />
+        )}
+        {tab === 'research' && (
+          <ResearchPanel area={area} onRefresh={refreshArea} />
         )}
       </div>
     </div>

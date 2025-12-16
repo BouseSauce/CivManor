@@ -5,6 +5,8 @@ import WorldBrowser from './WorldBrowser';
 import RegionView from './RegionView';
 import MyEmpire from './MyEmpire';
 import TechTree from './TechTree';
+import InboxPanel from './InboxPanel';
+import NotificationCenter from './NotificationCenter';
 import AreaView from './AreaView';
 import QueuePanel from './QueuePanel';
 
@@ -216,6 +218,13 @@ export default function Dashboard({ user, onLogout, onUserUpdate }) {
         )}
         {view === 'research' && (
           <TechTree />
+        )}
+
+        {view === 'messages' && (
+          <InboxPanel />
+        )}
+        {view === 'notifications' && (
+          <NotificationCenter />
         )}
 
         {view === 'area' && areaData && (

@@ -191,9 +191,9 @@ async function loadGameState() {
 }
 
 
-// Start Game Loop (1 Tick per Second) with enhanced logging
+// Start Game Loop (per-second ticks) with enhanced logging
 let TICK_NUMBER = 0;
-const TICK_MS = 30 * 1000; // 30 seconds per tick
+const TICK_MS = 1 * 1000; // 1 second per tick
 // Load persisted state (if any) then start tick loop
 loadGameState().then(() => {
     console.log(`Tick interval: ${TICK_MS}ms`);
@@ -330,7 +330,7 @@ app.post('/api/register', async (req, res) => {
     };
 
     const hash = await bcrypt.hash(password, 10);
-    users[id] = { id, username, password: hash, inventory, researchedTechs: [], activeResearch: null };
+    users[id] = { id, username, password: hash, inventory, researchedTechs: [], activeResearch: null, messages: [] };
     try { await saveGameState(); } catch (e) { /* logged in helper */ }
     return res.json({ success: true, id, username });
 });
@@ -382,7 +382,7 @@ app.post('/api/create-test-account', async (req, res) => {
     };
 
     const hash = await bcrypt.hash(password, 10);
-    users[id] = { id, username, password: hash, inventory, researchedTechs: [], activeResearch: null };
+    users[id] = { id, username, password: hash, inventory, researchedTechs: [], activeResearch: null, messages: [] };
     const token = crypto.randomBytes(24).toString('hex');
     tokens[token] = id;
     try { await saveGameState(); } catch (e) { }
@@ -390,9 +390,75 @@ app.post('/api/create-test-account', async (req, res) => {
     return res.json({ success: true, token, user: { id, username, password } });
 });
 
+// Messaging endpoints
+// Send a message to another user: { toUserId, subject, body }
+app.post('/api/messages/send', async (req, res) => {
+    const fromId = authFromReq(req);
+    if (!fromId) return res.status(401).json({ error: 'Unauthorized' });
+    const { toUserId, subject, body } = req.body || {};
+    if (!toUserId || !users[toUserId]) return res.status(400).json({ error: 'Recipient not found' });
+    if (!subject && !body) return res.status(400).json({ error: 'Message empty' });
+
+    const msg = { id: crypto.randomUUID(), from: fromId, to: toUserId, subject: subject || '', body: body || '', createdAt: Date.now(), read: false };
+    users[toUserId].messages = users[toUserId].messages || [];
+    users[toUserId].messages.push(msg);
+    try { await saveGameState(); } catch (e) { /* ignore save errors */ }
+    return res.json({ success: true, messageId: msg.id });
+});
+
+// Get inbox for authenticated user
+app.get('/api/messages/inbox', (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    user.messages = user.messages || [];
+    // Return messages with sender username
+    const out = user.messages.map(m => ({ ...m, fromName: users[m.from] ? users[m.from].username : null }));
+    return res.json({ messages: out.sort((a,b) => b.createdAt - a.createdAt) });
+});
+
+// Get sent messages for authenticated user (searches all users' inboxes)
+app.get('/api/messages/sent', (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const sent = [];
+    Object.values(users).forEach(u => {
+        (u.messages || []).forEach(m => {
+            if (m.from === userId) {
+                sent.push({ ...m, toName: users[m.to] ? users[m.to].username : null });
+            }
+        });
+    });
+    sent.sort((a,b) => b.createdAt - a.createdAt);
+    return res.json({ messages: sent });
+});
+
+// List users (id, username) for messaging
+app.get('/api/users', (req, res) => {
+    const list = Object.values(users).map(u => ({ id: u.id, username: u.username }));
+    return res.json({ users: list });
+});
+
+// Mark message read
+app.post('/api/messages/mark-read', async (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { messageId } = req.body || {};
+    if (!messageId) return res.status(400).json({ error: 'Missing messageId' });
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    user.messages = user.messages || [];
+    const msg = user.messages.find(m => m.id === messageId);
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+    msg.read = true;
+    try { await saveGameState(); } catch (e) { /* ignore */ }
+    return res.json({ success: true });
+});
+
 // Simple research metadata (demo)
 const RESEARCH_DEFS = {
-    'Basic Tools': { id: 'Basic Tools', description: 'Unlocks basic production improvements.', cost: { [ResourceEnum.Gold]: 20, [ResourceEnum.Timber]: 20 }, durationSeconds: 30 },
+    'Basic Tools': { id: 'Basic Tools', description: 'Unlocks basic production improvements.', cost: { [ResourceEnum.Gold]: 20, [ResourceEnum.Timber]: 20 }, durationSeconds: 30, requiredTownLevel: 1 },
     'Smelting': { id: 'Smelting', description: 'Allows smelting of ores.', cost: { [ResourceEnum.Gold]: 50, [ResourceEnum.Timber]: 30 }, durationSeconds: 45 },
     'The Wheel': { id: 'The Wheel', description: 'Enables wagons and trade', cost: { [ResourceEnum.Gold]: 40, [ResourceEnum.Timber]: 60 }, durationSeconds: 40 },
     'Agriculture': { id: 'Agriculture', description: 'Enables transition from foraging to organized farming (unlocks Farmhouse).', cost: { [ResourceEnum.Gold]: 30, [ResourceEnum.Timber]: 60 }, durationSeconds: 60 },
@@ -405,7 +471,10 @@ app.get('/api/research', (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const user = users[userId];
     if (!user) return res.status(404).json({ error: 'User not found' });
-    return res.json({ researched: user.researchedTechs || [], active: user.activeResearch || null, available: Object.keys(RESEARCH_DEFS) });
+    // Return researched list, active research, available tech ids and full definitions for UI cards
+    // Clone defs to avoid accidental mutation
+    const defs = JSON.parse(JSON.stringify(RESEARCH_DEFS || {}));
+    return res.json({ researched: user.researchedTechs || [], active: user.activeResearch || null, available: Object.keys(defs), defs });
 });
 
 app.post('/api/research/start', async (req, res) => {
@@ -419,6 +488,21 @@ app.post('/api/research/start', async (req, res) => {
     if (user.activeResearch) return res.status(400).json({ error: 'Another research is active' });
 
     const def = RESEARCH_DEFS[techId];
+    // Enforce any area ownership / TownHall requirements
+    if (def.requiredTownLevel) {
+        let hasReq = false;
+        for (const r of world.regions) {
+            for (const a of r.areas) {
+                if (a.ownerId === userId) {
+                    const st = areaStates[a.id];
+                    const lvl = st ? (st.buildings && st.buildings['TownHall'] ? st.buildings['TownHall'] : 0) : 0;
+                    if (lvl >= def.requiredTownLevel) { hasReq = true; break; }
+                }
+            }
+            if (hasReq) break;
+        }
+        if (!hasReq) return res.status(400).json({ error: `Requires TownHall level ${def.requiredTownLevel}` });
+    }
     // Check resources
     for (const [resName, amount] of Object.entries(def.cost || {})) {
         if ((user.inventory.resources[resName] || 0) < amount) return res.status(400).json({ error: `Insufficient ${resName}` });
@@ -575,9 +659,14 @@ app.get('/api/area/:areaId', async (req, res) => {
             if (id === 'HuntingLodge' && level > 0 && assigned > 0) {
                 const perWorker = RATES.meatPerWorkerPerSecond * level;
                 productionPerSecond[ResourceEnum.Meat] = perWorker * assigned;
-                perWorkerRates = { [ResourceEnum.Meat]: perWorker, [ResourceEnum.Hides]: (RATES.hidesPerWorkerPerSecond * level) };
-                // also include hides
-                productionPerSecond[ResourceEnum.Hides] = (RATES.hidesPerWorkerPerSecond * level) * assigned;
+                // Hides are unlocked at HuntingLodge level 5
+                if (level >= 5) {
+                    const hidesPerWorker = RATES.hidesPerWorkerPerSecond * level;
+                    productionPerSecond[ResourceEnum.Hides] = hidesPerWorker * assigned;
+                    perWorkerRates = { [ResourceEnum.Meat]: perWorker, [ResourceEnum.Hides]: hidesPerWorker };
+                } else {
+                    perWorkerRates = { [ResourceEnum.Meat]: perWorker };
+                }
             }
             if (id === 'StonePit' && level > 0 && assigned > 0) {
                 const perWorker = RATES.stonePitPerWorkerPerSecond * level;
@@ -743,6 +832,9 @@ app.post('/api/area/:areaId/assign', async (req, res) => {
     // Building must be at least level 1 to accept assignments
     const level = state.buildings[buildingId] || 0;
     if (level < 1) return res.status(400).json({ error: 'Building must be at least level 1 to assign workers' });
+
+    // Prevent assigning villagers to the TownHall/Settlement (it represents housing)
+    if (buildingId === 'TownHall') return res.status(400).json({ error: 'Cannot assign villagers to the TownHall/Settlement' });
 
     // Calculate available villagers (primary unit key is 'Villager')
     const totalVillagers = state.units[UnitTypeEnum.Villager] || 0;

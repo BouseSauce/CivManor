@@ -21,6 +21,8 @@ export default function DashboardLayout({ user, onLogout, children, onQuick, emp
           <button className="btn" onClick={() => onQuick('empire')}>My Empire</button>
           <button className="btn" onClick={() => onQuick('settings')}>Settings</button>
           <button className="btn" onClick={() => onQuick('research')}>Research</button>
+          <button className="btn" onClick={() => onQuick('messages')}>Messages</button>
+          <button className="btn" onClick={() => onQuick('notifications')}>Notifications</button>
           <div className="user-block">
             <div style={{ marginBottom: 6 }}>Logged in as</div>
             <div style={{ fontWeight: 'bold' }}>{user?.username}</div>
