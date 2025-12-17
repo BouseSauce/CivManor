@@ -58,6 +58,7 @@ function serializeAreaState(state) {
         buildings: state.buildings,
         units: state.units,
         assignments: state.assignments,
+        idleReasons: state.idleReasons || {},
         queue: state.queue
     };
 }
@@ -74,6 +75,7 @@ function restoreAreaState(obj) {
     s.buildings = obj.buildings || s.buildings;
     s.units = obj.units || s.units;
     s.assignments = obj.assignments || s.assignments;
+    s.idleReasons = obj.idleReasons || {};
     s.queue = obj.queue || s.queue;
     return s;
 }
@@ -717,13 +719,24 @@ app.get('/api/admin/config', (req, res) => {
 
 // Simple research metadata (demo)
 const RESEARCH_DEFS = {
-    'Basic Tools': { id: 'Basic Tools', description: 'Unlocks basic production improvements.', cost: { [ResourceEnum.Stone]: 1200, [ResourceEnum.Timber]: 1400 }, durationSeconds: 30, requiredTownLevel: 1 },
+    // Make Basic Tools affordable early-game so players can research it without large reserves
+    'Basic Tools': { id: 'Basic Tools', description: 'Unlocks basic production improvements.', cost: { [ResourceEnum.Stone]: 30, [ResourceEnum.Timber]: 50 }, durationSeconds: 20, requiredTownLevel: 1 },
     'Smelting': { id: 'Smelting', description: 'Allows smelting of ores.', cost: { [ResourceEnum.Gold]: 50, [ResourceEnum.Timber]: 30 }, durationSeconds: 45 },
     'The Wheel': { id: 'The Wheel', description: 'Enables wagons and trade', cost: { [ResourceEnum.Gold]: 40, [ResourceEnum.Timber]: 60 }, durationSeconds: 40 },
     'Agriculture': { id: 'Agriculture', description: 'Enables transition from foraging to organized farming (unlocks Farmhouse).', cost: { [ResourceEnum.Gold]: 30, [ResourceEnum.Timber]: 60 }, durationSeconds: 60 },
     'Advanced Studies': { id: 'Advanced Studies', description: 'Unlocks higher tier techs.', cost: { [ResourceEnum.Gold]: 120 }, durationSeconds: 90 }
     , 'Gold Storage': { id: 'Gold Storage', description: 'Allows storage of Gold in your Storehouse.', cost: { [ResourceEnum.Gold]: 0, [ResourceEnum.Timber]: 50 }, durationSeconds: 60 },
     'Ore Storage': { id: 'Ore Storage', description: 'Allows storage of raw ores (IronOre/Coal) in your Storehouse.', cost: { [ResourceEnum.Gold]: 0, [ResourceEnum.Timber]: 60 }, durationSeconds: 75 }
+};
+
+// New: Timber -> Planks research. Requires Basic Tools and a TownHall level 2 settlement.
+RESEARCH_DEFS['Timber Planks'] = {
+    id: 'Timber Planks',
+    description: 'Enables villagers to convert Timber into Planks at Logging Camps (4 Timber -> 1 Plank). Requires Basic Tools and TownHall level 2.',
+    cost: { [ResourceEnum.Timber]: 200, [ResourceEnum.Gold]: 10 },
+    durationSeconds: 40,
+    requiredTownLevel: 2,
+    requiredTechs: ['Basic Tools']
 };
 
 // Research endpoints
@@ -750,10 +763,23 @@ app.get('/api/research', (req, res) => {
     const maxTownLevel = userTownLevels.length > 0 ? Math.max(...userTownLevels) : 0;
 
     const available = [];
+    const userResearched = (users[userId] && users[userId].researchedTechs) || [];
     Object.keys(defs).forEach(tid => {
         const def = defs[tid];
+        // Special-case: make Basic Tools available to all players by default
+        if (tid === 'Basic Tools') {
+            def.locked = false;
+            available.push(tid);
+            return;
+        }
+        let locked = false;
         const reqLvl = def.requiredTownLevel || 0;
-        const locked = reqLvl > 0 && maxTownLevel < reqLvl;
+        if (reqLvl > 0 && maxTownLevel < reqLvl) locked = true;
+        // If research has tech prereqs, lock unless user has researched them
+        if (!locked && Array.isArray(def.requiredTechs) && def.requiredTechs.length > 0) {
+            const missing = def.requiredTechs.filter(t => !userResearched.includes(t));
+            if (missing.length > 0) locked = true;
+        }
         def.locked = locked;
         if (!locked) available.push(tid);
     });
@@ -775,8 +801,8 @@ app.post('/api/research/start', async (req, res) => {
     if (user.activeResearch) return res.status(400).json({ error: 'Another research is active' });
 
     const def = RESEARCH_DEFS[techId];
-    // Enforce any area ownership / TownHall requirements
-    if (def.requiredTownLevel) {
+    // Enforce any area ownership / TownHall requirements (skip for Basic Tools)
+    if (def.requiredTownLevel && techId !== 'Basic Tools') {
         let hasReq = false;
         for (const r of world.regions) {
             for (const a of r.areas) {
@@ -790,19 +816,38 @@ app.post('/api/research/start', async (req, res) => {
         }
         if (!hasReq) return res.status(400).json({ error: `Requires TownHall level ${def.requiredTownLevel}` });
     }
+    // Ensure tech prereqs are met (skip for Basic Tools)
+    if (Array.isArray(def.requiredTechs) && def.requiredTechs.length > 0 && techId !== 'Basic Tools') {
+        const have = user.researchedTechs || [];
+        const missing = def.requiredTechs.filter(t => !have.includes(t));
+        if (missing.length) return res.status(400).json({ error: `Missing prerequisite research: ${missing.join(', ')}` });
+    }
     // Ensure user.inventory.resources exists
     user.inventory = user.inventory || { resources: {}, units: {}, cartContents: {} };
     user.inventory.resources = user.inventory.resources || {};
     Object.values(ResourceEnum).forEach(r => { if (typeof user.inventory.resources[r] === 'undefined') user.inventory.resources[r] = 0; });
 
-    // Check resources
+    // Check resources. Allow using both `inventory.resources` and `inventory.cartContents` (e.g. trade cart)
+    const cart = user.inventory.cartContents || {};
     for (const [resName, amount] of Object.entries(def.cost || {})) {
-        if ((user.inventory.resources[resName] || 0) < amount) return res.status(400).json({ error: `Insufficient ${resName}` });
+        const haveRes = (user.inventory.resources[resName] || 0);
+        const haveCart = (cart[resName] || 0);
+        if ((haveRes + haveCart) < amount) return res.status(400).json({ error: `Insufficient ${resName}` });
     }
-    // Deduct
+    // Deduct from resources first, then cartContents if needed
     for (const [resName, amount] of Object.entries(def.cost || {})) {
-        user.inventory.resources[resName] -= amount;
+        let remaining = amount;
+        const fromRes = Math.min(user.inventory.resources[resName] || 0, remaining);
+        if (fromRes > 0) {
+            user.inventory.resources[resName] = (user.inventory.resources[resName] || 0) - fromRes;
+            remaining -= fromRes;
+        }
+        if (remaining > 0) {
+            cart[resName] = (cart[resName] || 0) - remaining;
+            if (cart[resName] < 0) cart[resName] = 0;
+        }
     }
+    user.inventory.cartContents = cart;
 
     const now = Date.now();
     // Treat durationSeconds as ticks
@@ -824,6 +869,23 @@ app.post('/api/research/complete', async (req, res) => {
     user.activeResearch = null;
     try { await saveGameState(); } catch (e) { }
     return res.json({ success: true });
+});
+
+// Dev helper: grant a research instantly to the authenticated user (useful for testing)
+app.post('/api/research/grant', async (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const body = req.body || {};
+    const techId = body.techId || body.id || null;
+    if (!techId || !RESEARCH_DEFS[techId]) return res.status(400).json({ error: 'Invalid tech id' });
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    user.researchedTechs = user.researchedTechs || [];
+    if (!user.researchedTechs.includes(techId)) user.researchedTechs.push(techId);
+    // Clear activeResearch if it matches
+    if (user.activeResearch && user.activeResearch.techId === techId) user.activeResearch = null;
+    try { await saveGameState(); } catch (e) { /* ignore */ }
+    return res.json({ success: true, researched: user.researchedTechs });
 });
 
 // Return list of regions and areas (only exposes ownerId and name)
@@ -964,6 +1026,16 @@ app.get('/api/area/:areaId', async (req, res) => {
                 const perWorker = RATES.timberPerWorkerPerSecond * level; // per assigned villager contribution
                 productionPerSecond[ResourceEnum.Timber] = perWorker * assigned;
                 perWorkerRates = { [ResourceEnum.Timber]: perWorker };
+                // Planks role: workers assigned to 'LoggingCamp:Planks' will consume timber -> planks (4:1)
+                const assignedPlanks = (state.assignments && state.assignments['LoggingCamp:Planks']) || 0;
+                if (assignedPlanks > 0) {
+                    const perWorkerPlank = (RATES.timberPerWorkerPerSecond * level) / 4.0; // planks produced per worker/sec (derived)
+                    productionPerSecond[ResourceEnum.Planks] = perWorkerPlank * assignedPlanks;
+                    perWorkerRates[ResourceEnum.Planks] = perWorkerPlank;
+                }
+                // Expose assignedPlanks to client so UI can render separate assignment control
+                // (will be undefined for other buildings)
+                var _assignedPlanksForUI = assignedPlanks;
             }
             if (id === 'DeepMine' && level > 0) productionPerSecond[ResourceEnum.Stone] = level * RATES.stonePerLevelPerSecond;
             if (id === 'Farmhouse' && level > 0) productionPerSecond[ResourceEnum.Bread] = level * RATES.breadPerLevelPerSecond;
@@ -1013,11 +1085,16 @@ app.get('/api/area/:areaId', async (req, res) => {
                 productionPerHour,
                 perWorkerRates: perWorkerRates || {},
                 perWorkerRatesPerHour,
+                // Support role-style plank assignments (LoggingCamp:Planks)
+                assignedPlanks: (state.assignments && (state.assignments[id + ':Planks'])) || 0,
+                canProducePlanks: (id === 'LoggingCamp') ? (((users[areaMeta.ownerId] && users[areaMeta.ownerId].researchedTechs) || []).includes('Timber Planks')) : false,
                 // Expose housing & research progression data for UI (TownHall)
                 housingByLevel: config.housingByLevel || null,
                 researchSlotsByLevel: config.researchSlotsByLevel || null,
                 missingReqs: evalRes.missing || [],
                 assigned,
+                assignedPlanks: (typeof _assignedPlanksForUI !== 'undefined') ? _assignedPlanksForUI : 0,
+                canProducePlanks: !!(users[areaMeta.ownerId] && Array.isArray(users[areaMeta.ownerId].researchedTechs) && users[areaMeta.ownerId].researchedTechs.includes('Timber Planks')),
                 category: config.category || null,
                 tags: config.tags || [],
                 relatedTechs: (config.relatedTechs || []).map(t => ({ id: t, researched: ((users[areaMeta.ownerId] && users[areaMeta.ownerId].researchedTechs) || []).includes(t) })),
@@ -1059,7 +1136,8 @@ app.get('/api/area/:areaId', async (req, res) => {
             })),
             buildings: buildingsWithCosts,
             units: Object.entries(state.units).map(([type, count]) => ({ type, count })),
-            assignments: state.assignments || {}
+            assignments: state.assignments || {},
+            idleReasons: state.idleReasons || {}
         });
     }
 
@@ -1151,15 +1229,17 @@ app.post('/api/area/:areaId/assign', async (req, res) => {
     const state = areaStates[areaId];
     if (!state) return res.status(500).json({ error: 'Area state missing' });
 
-    // Validate building exists in config
-    if (!BUILDING_CONFIG[buildingId]) return res.status(400).json({ error: 'Invalid building id' });
+    // Allow role-style assignment ids like "LoggingCamp:Planks" — validate the base building id
+    const baseParts = (buildingId || '').split(':');
+    const baseBuildingId = baseParts[0];
+    if (!BUILDING_CONFIG[baseBuildingId]) return res.status(400).json({ error: 'Invalid building id' });
 
     // Building must be at least level 1 to accept assignments
-    const level = state.buildings[buildingId] || 0;
+    const level = state.buildings[baseBuildingId] || 0;
     if (level < 1) return res.status(400).json({ error: 'Building must be at least level 1 to assign workers' });
 
     // Prevent assigning villagers to the TownHall/Settlement (it represents housing)
-    if (buildingId === 'TownHall' || buildingId === 'Storehouse') return res.status(400).json({ error: 'Cannot assign villagers to the TownHall/Settlement or Storehouse' });
+    if (baseBuildingId === 'TownHall' || baseBuildingId === 'Storehouse') return res.status(400).json({ error: 'Cannot assign villagers to the TownHall/Settlement or Storehouse' });
 
     // Calculate available villagers (primary unit key is 'Villager')
     const totalVillagers = state.units[UnitTypeEnum.Villager] || 0;
@@ -1169,7 +1249,7 @@ app.post('/api/area/:areaId/assign', async (req, res) => {
     if (newTotalAssigned > totalVillagers) return res.status(400).json({ error: 'Not enough villagers available' });
 
     // Enforce per-building capacity: default to 3 + level * 1.5 if not specified in config
-    const cfg = BUILDING_CONFIG[buildingId] || {};
+    const cfg = BUILDING_CONFIG[baseBuildingId] || {};
     const maxByConfig = cfg.workerCapacity ? (cfg.workerCapacity * level) : Math.max(1, Math.floor(3 + (level * 1.5)));
     if (count > maxByConfig) return res.status(400).json({ error: `Exceeds max workers for ${buildingId}: ${maxByConfig}` });
 
@@ -1185,7 +1265,7 @@ app.post('/api/area/:areaId/assign', async (req, res) => {
     }
 
     // Return a small snapshot to allow the client to refresh UI without full area refetch
-    return res.json({ success: true, assignments: state.assignments, units: state.units, buildings: Object.keys(state.buildings).map(id => ({ id, level: state.buildings[id] })) });
+    return res.json({ success: true, assignments: state.assignments, idleReasons: state.idleReasons || {}, units: state.units, buildings: Object.keys(state.buildings).map(id => ({ id, level: state.buildings[id] })) });
 });
 
 // Upgrade a building on an owned area
