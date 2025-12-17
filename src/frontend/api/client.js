@@ -16,14 +16,13 @@ export const GameClient = {
         const headers = Object.assign({}, opts.headers || {}, authHeaders());
         const response = await fetch(`${API_BASE_URL}${path}`, Object.assign({}, opts, { headers }));
 
-        // If unauthorized, clear token and redirect to login so user can re-authenticate
+        // If unauthorized, clear token and surface the error for the app to handle
         if (response.status === 401) {
             _token = null;
             try { localStorage.removeItem('gb_token'); } catch(e) {}
-            // Redirect to login page
-            if (typeof window !== 'undefined') window.location.href = '/login';
             const text401 = await response.text().catch(() => 'Unauthorized');
-            throw { message: 'Unauthorized', error: text401 };
+            // Throw an error so callers can decide how to react (e.g., show login UI)
+            throw { message: 'Unauthorized', error: text401, status: 401 };
         }
 
         const text = await response.text();

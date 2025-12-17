@@ -8,10 +8,11 @@ import { processTick, AreaState, startConstruction } from '../src/core/gameLoop.
 import bcrypt from 'bcryptjs';
 import { BUILDING_CONFIG, BUILDING_PREREQS } from '../src/core/config/buildings.js';
 import { evaluatePrereqs } from '../src/core/validation/buildingPrereqs.js';
-import { calculateUpgradeCost } from '../src/core/logic/scaling.js';
+import { calculateUpgradeCost, calculateBuildTime } from '../src/core/logic/scaling.js';
 import { ResourceEnum, UnitTypeEnum } from '../src/core/constants/enums.js';
 import { FOOD_SUSTENANCE_VALUES } from '../src/core/config/food.js';
 import { SUSTENANCE_PER_POP_PER_SECOND } from '../src/core/logic/economy.js';
+import { GAME_CONFIG } from '../src/core/config/gameConfig.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -161,9 +162,23 @@ async function loadGameState() {
         const stat = await fsp.stat(DATA_FILE).catch(() => null);
         if (!stat) return;
         const txt = await fsp.readFile(DATA_FILE, 'utf-8');
-        const parsed = JSON.parse(txt);
+        let parsed = null;
+        try {
+            parsed = JSON.parse(txt);
+        } catch (err) {
+            console.error('Failed to parse save file (corrupted or truncated):', err.message);
+            try {
+                const corruptBackup = DATA_FILE + `.corrupt.${Date.now()}`;
+                await fsp.copyFile(DATA_FILE, corruptBackup);
+                console.log(`Backed up corrupted save to ${corruptBackup}`);
+            } catch (copyErr) {
+                console.error('Failed to back up corrupted save file:', copyErr.message);
+            }
+            // Do not throw further — start with a fresh in-memory state.
+            parsed = null;
+        }
 
-        if (parsed.users) {
+        if (parsed && parsed.users) {
             Object.keys(parsed.users).forEach(k => users[k] = parsed.users[k]);
             console.log(`Loaded ${Object.keys(parsed.users).length} users from save`);
         }
@@ -193,7 +208,7 @@ async function loadGameState() {
 
 // Start Game Loop (per-second ticks) with enhanced logging
 let TICK_NUMBER = 0;
-const TICK_MS = 1 * 1000; // 1 second per tick
+const TICK_MS = GAME_CONFIG.TICK_MS; 
 // Load persisted state (if any) then start tick loop
 loadGameState().then(() => {
     console.log(`Tick interval: ${TICK_MS}ms`);
@@ -211,12 +226,13 @@ loadGameState().then(() => {
         const summaries = [];
 
         // Tick each state and compute deltas for a concise summary
-        const seconds = Math.max(1, Math.floor(TICK_MS / 1000));
+        // We pass 1 tick unit to processTick, representing one game loop iteration
         states.forEach(state => {
             const before = { resources: Object.assign({}, state.resources), population: state.population, queueLen: state.queue.length };
 
-            // Pass elapsed seconds to the game loop so timers decrement in real time
-            processTick(state, seconds);
+            // Pass 1 tick unit. Logic inside processTick handles scaling if needed, 
+            // but generally 1 tick = 1 unit of production/consumption time.
+            processTick(state, 1);
 
             const after = { resources: Object.assign({}, state.resources), population: state.population, queueLen: state.queue.length };
 
@@ -237,13 +253,22 @@ loadGameState().then(() => {
         // Process user research completion and count how many finished this tick
         let researchCompleted = 0;
         Object.values(users).forEach(user => {
-            if (user.activeResearch && user.activeResearch.completesAt <= now) {
-                const tech = user.activeResearch.techId;
-                user.researchedTechs = user.researchedTechs || [];
-                if (!user.researchedTechs.includes(tech)) user.researchedTechs.push(tech);
-                user.activeResearch = null;
-                researchCompleted++;
-                console.log(`Research complete for user ${user.username}: ${tech}`);
+            if (user.activeResearch) {
+                // Decrement ticks remaining
+                if (typeof user.activeResearch.ticksRemaining === 'undefined') {
+                    // Migration for existing research: assume 1 tick left if not set
+                    user.activeResearch.ticksRemaining = 1;
+                }
+                user.activeResearch.ticksRemaining -= 1;
+
+                if (user.activeResearch.ticksRemaining <= 0) {
+                    const tech = user.activeResearch.techId;
+                    user.researchedTechs = user.researchedTechs || [];
+                    if (!user.researchedTechs.includes(tech)) user.researchedTechs.push(tech);
+                    user.activeResearch = null;
+                    researchCompleted++;
+                    console.log(`Research complete for user ${user.username}: ${tech}`);
+                }
             }
         });
 
@@ -513,7 +538,8 @@ app.post('/api/research/start', async (req, res) => {
     }
 
     const now = Date.now();
-    user.activeResearch = { techId, startedAt: now, completesAt: now + (def.durationSeconds * 1000), durationSeconds: def.durationSeconds };
+    // Treat durationSeconds as ticks
+    user.activeResearch = { techId, startedAt: now, ticksRemaining: def.durationSeconds, totalTicks: def.durationSeconds };
     try { await saveGameState(); } catch (e) { }
     return res.json({ success: true, active: user.activeResearch });
 });
@@ -609,17 +635,40 @@ app.get('/api/area/:areaId', async (req, res) => {
         } catch (e) {
             console.error('Error processing on-read queue completions:', e);
         }
+        // Normalize queue items: ensure timing fields exist for older saved items
+        try {
+            const nowMsNorm = Date.now();
+            state.queue = state.queue.map(item => {
+                const itm = Object.assign({}, item);
+                // If ticks-based fields exist, ensure totalTime/totalTicks are set
+                if (typeof itm.totalTicks === 'number' && typeof itm.totalTime === 'undefined') itm.totalTime = itm.totalTicks;
+                // If ticksRemaining exists but completesAt/timeRemaining missing, compute them
+                if (typeof itm.ticksRemaining === 'number') {
+                    if (typeof itm.timeRemaining === 'undefined') itm.timeRemaining = itm.ticksRemaining;
+                    if (typeof itm.completesAt === 'undefined') itm.completesAt = nowMsNorm + (itm.ticksRemaining * 1000);
+                }
+                // If completesAt exists but ticksRemaining missing, compute ticksRemaining
+                if (typeof itm.completesAt === 'number' && typeof itm.ticksRemaining === 'undefined') {
+                    itm.ticksRemaining = Math.max(0, Math.floor((itm.completesAt - nowMsNorm) / 1000));
+                    if (typeof itm.timeRemaining === 'undefined') itm.timeRemaining = itm.ticksRemaining;
+                    if (typeof itm.totalTime === 'undefined') itm.totalTime = itm.totalTicks || itm.ticksRemaining || 1;
+                }
+                // Ensure totalTime fallback
+                if (typeof itm.totalTime === 'undefined') itm.totalTime = itm.totalTicks || itm.ticksRemaining || 1;
+                return itm;
+            });
+        } catch (e) {
+            console.error('Failed to normalize queue timing fields:', e);
+        }
         const buildingsWithCosts = Object.keys(BUILDING_CONFIG).map(id => {
             const level = state.buildings[id] || 0;
             const config = BUILDING_CONFIG[id];
             const isUpgrading = state.queue.some(item => item.id === id && item.type === 'Building');
-            const front = state.queue[0] || null;
-            const frontRemaining = front && front.completesAt ? Math.max(0, Math.floor((front.completesAt - Date.now()) / 1000)) : (front ? (front.timeRemaining || 0) : 0);
-            const upgradeProgress = isUpgrading && front ? Math.floor(((front.totalTime - frontRemaining) / front.totalTime) * 100) : 0;
-            // Attach per-building upgrade timing if present in queue
+            // Use the specific queue item for this building to compute its progress
             const queueItem = state.queue.find(item => item.type === 'Building' && item.id === id);
-            const upgradeSecondsRemaining = queueItem ? (queueItem.completesAt ? Math.max(0, Math.floor((queueItem.completesAt - Date.now()) / 1000)) : (queueItem.timeRemaining || null)) : null;
-            const upgradeTotalTime = queueItem ? (queueItem.totalTime || null) : null;
+            const upgradeSecondsRemaining = queueItem ? (typeof queueItem.ticksRemaining !== 'undefined' ? queueItem.ticksRemaining : (queueItem.timeRemaining || null)) : null;
+            const upgradeTotalTime = queueItem ? (queueItem.totalTicks || queueItem.totalTime || null) : null;
+            const upgradeProgress = queueItem && upgradeTotalTime ? Math.floor(((upgradeTotalTime - (upgradeSecondsRemaining || 0)) / upgradeTotalTime) * 100) : 0;
 
             // Evaluate prereqs for display
             const evalRes = evaluatePrereqs(state, users[areaMeta.ownerId], id);
@@ -651,26 +700,26 @@ app.get('/api/area/:areaId', async (req, res) => {
             }
             if (id === 'DeepMine' && level > 0) productionPerSecond[ResourceEnum.Stone] = level * RATES.stonePerLevelPerSecond;
             if (id === 'Farmhouse' && level > 0) productionPerSecond[ResourceEnum.Bread] = level * RATES.breadPerLevelPerSecond;
-            if (id === 'ForagersHut' && level > 0 && assigned > 0) {
+            if (id === 'ForagersHut' && level > 0) {
                 const perWorker = RATES.berriesPerWorkerPerSecond * level;
-                productionPerSecond[ResourceEnum.Berries] = perWorker * assigned;
+                if (assigned > 0) productionPerSecond[ResourceEnum.Berries] = perWorker * assigned;
                 perWorkerRates = { [ResourceEnum.Berries]: perWorker };
             }
-            if (id === 'HuntingLodge' && level > 0 && assigned > 0) {
+            if (id === 'HuntingLodge' && level > 0) {
                 const perWorker = RATES.meatPerWorkerPerSecond * level;
-                productionPerSecond[ResourceEnum.Meat] = perWorker * assigned;
+                if (assigned > 0) productionPerSecond[ResourceEnum.Meat] = perWorker * assigned;
                 // Hides are unlocked at HuntingLodge level 5
                 if (level >= 5) {
                     const hidesPerWorker = RATES.hidesPerWorkerPerSecond * level;
-                    productionPerSecond[ResourceEnum.Hides] = hidesPerWorker * assigned;
+                    if (assigned > 0) productionPerSecond[ResourceEnum.Hides] = hidesPerWorker * assigned;
                     perWorkerRates = { [ResourceEnum.Meat]: perWorker, [ResourceEnum.Hides]: hidesPerWorker };
                 } else {
                     perWorkerRates = { [ResourceEnum.Meat]: perWorker };
                 }
             }
-            if (id === 'StonePit' && level > 0 && assigned > 0) {
+            if (id === 'StonePit' && level > 0) {
                 const perWorker = RATES.stonePitPerWorkerPerSecond * level;
-                productionPerSecond[ResourceEnum.Stone] = perWorker * assigned;
+                if (assigned > 0) productionPerSecond[ResourceEnum.Stone] = perWorker * assigned;
                 perWorkerRates = { [ResourceEnum.Stone]: perWorker };
             }
 
@@ -921,53 +970,48 @@ app.post('/api/area/:areaId/upgrade', async (req, res) => {
 
 // Existing gamestate endpoint (for backward compatibility) - returns default demo area
 app.get('/api/gamestate', async (req, res) => {
-    // On-read: complete any finished queue items for demo gameState
-    try {
-        const nowMs = Date.now();
-        let changed = false;
-        while (gameState.queue.length > 0) {
-            const front = gameState.queue[0];
-            if (front && front.completesAt && front.completesAt <= nowMs) {
-                const item = gameState.queue.shift();
-                if (item.type === 'Building') {
-                    gameState.buildings[item.id] = (gameState.buildings[item.id] || 0) + 1;
-                    console.log(`(On-read demo) Construction Complete: ${item.name} -> Lvl ${gameState.buildings[item.id]}`);
-                } else if (item.type === 'Unit') {
-                    gameState.units[item.id] = (gameState.units[item.id] || 0) + (item.count || 0);
-                    console.log(`(On-read demo) Recruitment Complete: ${item.name}`);
-                }
-                changed = true;
-                continue;
-            }
-            break;
-        }
-        if (changed) {
-            try { await saveGameState(); } catch (e) { }
-        }
-    } catch (e) { console.error('Error processing demo on-read queue:', e); }
+    // On-read completion removed: The main tick loop handles queue processing now.
 
     const buildingsWithCosts = Object.keys(BUILDING_CONFIG).map(id => {
         const level = gameState.buildings[id] || 0;
         const config = BUILDING_CONFIG[id];
         const isUpgrading = gameState.queue.some(item => item.id === id && item.type === 'Building');
         const front = gameState.queue[0] || null;
-        const frontRemaining = front && front.completesAt ? Math.max(0, Math.floor((front.completesAt - Date.now()) / 1000)) : (front ? (front.timeRemaining || 0) : 0);
-        const upgradeProgress = isUpgrading && front ? Math.floor(((front.totalTime - frontRemaining) / front.totalTime) * 100) : 0;
-        return { id, name: config.name, displayName: config.displayName || config.name, level, isLocked: false, isUpgrading, progress: upgradeProgress, upgradeCost: calculateUpgradeCost(id, level), reqs: 'None', category: config.category || null, tags: config.tags || [] };
+        // Use ticksRemaining directly
+        const ticksRemaining = front && front.id === id ? (front.ticksRemaining || 0) : 0;
+        const totalTicks = front && front.id === id ? (front.totalTicks || 1) : 1;
+        const upgradeProgress = isUpgrading && front && front.id === id ? Math.floor(((totalTicks - ticksRemaining) / totalTicks) * 100) : 0;
+        
+        return { 
+            id, 
+            name: config.name, 
+            displayName: config.displayName || config.name, 
+            level, 
+            isLocked: false, 
+            isUpgrading, 
+            progress: upgradeProgress, 
+            upgradeCost: calculateUpgradeCost(id, level), 
+            upgradeTime: calculateBuildTime(id, level), // This is total ticks
+            upgradeSecondsRemaining: ticksRemaining, // Sending ticks as "seconds" unit for now, frontend will scale
+            reqs: 'None', 
+            category: config.category || null, 
+            tags: config.tags || [] 
+        };
     });
 
     res.json({
         resources: gameState.resources,
         stats: { currentPop: gameState.population, maxPop: gameState.housingCapacity, approval: gameState.approval, foodTimeRemaining: 'Infinite' },
-        queue: gameState.queue.map(item => ({
-            ...item,
-            progress: (() => {
-                const rem = item.completesAt ? Math.max(0, Math.floor((item.completesAt - Date.now()) / 1000)) : (item.timeRemaining || 0);
-                return item.totalTime ? Math.floor(((item.totalTime - rem) / item.totalTime) * 100) : 0;
-            })(),
-            secondsRemaining: item.completesAt ? Math.max(0, Math.floor((item.completesAt - Date.now()) / 1000)) : Math.max(0, Math.floor(item.timeRemaining || 0)),
-            timeRemaining: item.completesAt ? `${Math.max(0, Math.floor((item.completesAt - Date.now()) / 1000))}s` : `${Math.max(0, Math.floor(item.timeRemaining || 0))}s`
-        })),
+        queue: gameState.queue.map(item => {
+            const rem = typeof item.ticksRemaining !== 'undefined' ? item.ticksRemaining : (item.timeRemaining || 0);
+            const total = item.totalTicks || item.totalTime || 1;
+            return {
+                ...item,
+                progress: Math.floor(((total - rem) / total) * 100),
+                secondsRemaining: rem, // Sending ticks
+                timeRemaining: `${rem}s` // Sending ticks as string
+            };
+        }),
         buildings: buildingsWithCosts,
         units: Object.entries(gameState.units).map(([type, count]) => ({ type, count })),
         assignments: gameState.assignments || {}

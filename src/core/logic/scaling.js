@@ -60,3 +60,22 @@ export function calculateUpgradeCost(buildingId, currentLevel) {
 
     return cost;
 }
+
+/**
+ * Calculates the build time for the next level of a building.
+ * Formula: Time = BaseTime * (GrowthFactor)^Level
+ * 
+ * @param {string} buildingId - The ID of the building
+ * @param {number} currentLevel - The current level of the building
+ * @returns {number} - Build time in seconds
+ */
+export function calculateBuildTime(buildingId, currentLevel) {
+    const config = BUILDING_CONFIG[buildingId];
+    if (!config) return 60; // Default fallback
+
+    const gf = config.growthFactor;
+    const baseTimeSeconds = (config.baseBuildTimeMinutes || 1) * 60;
+    
+    // Time(L+1) = BaseTime * GF^L
+    return Math.floor(baseTimeSeconds * Math.pow(gf, currentLevel));
+}

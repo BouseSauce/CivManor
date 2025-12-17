@@ -9,7 +9,7 @@
  * @param {string} origin - "R1:A1"
  * @param {string} destination - "R2:A1"
  * @param {number} speedMultiplier - Unit speed (1 = standard)
- * @returns {number} - Time in minutes
+ * @returns {number} - Time in ticks
  */
 export function calculateTravelTime(origin, destination, speedMultiplier = 1) {
     const parseCoord = (coord) => {
@@ -22,8 +22,9 @@ export function calculateTravelTime(origin, destination, speedMultiplier = 1) {
     const start = parseCoord(origin);
     const end = parseCoord(destination);
 
-    const BASE_TIME_PER_AREA = 10; // Minutes per area index
-    const REGION_TRAVERSAL_PENALTY = 120; // 2 hours to cross a region
+    // Base times in ticks (assuming 1 tick = 1 game second)
+    const BASE_TIME_PER_AREA = 600; // 10 Minutes (600s) per area index
+    const REGION_TRAVERSAL_PENALTY = 7200; // 2 hours (7200s) to cross a region
 
     let totalBaseTime = 0;
 

@@ -19,6 +19,8 @@ export default function BuildingCard({ b, onOpen, onAssign, onUpgrade, compact =
   const desc = b.description || (BUILDING_CONFIG[b.id] && BUILDING_CONFIG[b.id].description) || 'No description available.';
 
   const isBuilt = b.level && b.level > 0;
+  const statusText = b.isUpgrading ? 'Upgrading' : ((b.assigned || 0) > 0 ? `Active (${b.assigned})` : 'Idle');
+  const statusColor = b.isUpgrading ? 'var(--accent-gold)' : ((b.assigned || 0) > 0 ? 'var(--accent-green)' : '#888');
     if (compact) {
     return (
       <div className={`building-card compact ${b.isLocked ? 'locked' : ''}`} style={{ cursor: 'pointer', padding: 10, minWidth: 200 }} onClick={() => onOpen && onOpen(b)}>
@@ -30,6 +32,7 @@ export default function BuildingCard({ b, onOpen, onAssign, onUpgrade, compact =
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <div style={{ fontWeight: 700, color: '#eee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.displayName || b.name}</div>
               {!b.isLocked && <div style={{ fontSize: '0.75rem', color: '#ccc', background: 'rgba(0,0,0,0.35)', padding: '2px 6px', borderRadius: 4 }}>Lvl {b.level || 0}</div>}
+              <div style={{ fontSize: '0.72rem', color: statusColor, background: 'rgba(0,0,0,0.35)', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>{statusText}</div>
             </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 6 }}>{desc.split('.')[0]}{(desc.split('.')[0] || '').length > 0 ? '.' : ''}</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
@@ -52,7 +55,7 @@ export default function BuildingCard({ b, onOpen, onAssign, onUpgrade, compact =
                 onClick={(e) => { e.stopPropagation(); if (!b.isLocked && onUpgrade) onUpgrade(b.id); }}
                 disabled={b.isLocked || b.isUpgrading}
               >
-                {b.level && b.level > 0 ? 'Upgrade' : 'Build'}
+                {b.isUpgrading ? 'Upgrading' : (b.level && b.level > 0 ? 'Upgrade' : 'Build')}
               </button>
               {/* Assign button removed from compact card per UX request */}
             </div>
@@ -91,8 +94,7 @@ export default function BuildingCard({ b, onOpen, onAssign, onUpgrade, compact =
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {!b.isLocked && <div style={{ backgroundColor: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '2px', fontSize: '0.75rem', color: '#aaa', border: '1px solid rgba(255,255,255,0.1)' }}>Lvl {b.level}</div>}
-          {/* Assigned badge */}
-          {/* Assigned/villager capacity removed from building card to simplify UI */}
+          <div style={{ fontSize: '0.8rem', color: statusColor, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.03)', fontWeight: 700 }}>{statusText}</div>
         </div>
       </div>
 

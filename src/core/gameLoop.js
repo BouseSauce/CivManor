@@ -1,7 +1,7 @@
 import { ResourceEnum, UnitTypeEnum } from './constants/enums.js';
 import { BUILDING_CONFIG } from './config/buildings.js';
 import { calculateApproval, processPopulationTick } from './logic/economy.js';
-import { calculateUpgradeCost } from './logic/scaling.js';
+import { calculateUpgradeCost, calculateBuildTime } from './logic/scaling.js';
 
 /**
  * Represents the state of a single Area (e.g., a Village or City).
@@ -52,73 +52,73 @@ export class AreaState {
 
 /**
  * Calculates resource production based on building levels.
- * (Simplified logic for demo purposes)
+ * Implements Exponential Scaling: Production = Base * Level * 1.1^Level
  */
 function calculateProduction(state) {
     const production = {};
-    // Production rates are defined per-second and then scaled by the tick `seconds` passed
-    // Default per-second rates (tweakable): these are base outputs per building level or per assigned worker
+    // Base production rates per second (per worker or per building)
     const RATES = {
-        // LoggingCamp: produce only when villagers are assigned (per-worker rate)
-        timberPerWorkerPerSecond: 0.06, // 0.06 Timber / sec per assigned villager per LoggingCamp level
-        stonePerLevelPerSecond: 0.25,   // 0.25 Stone / sec per DeepMine level
-        // StonePit (quarry): produces stone per assigned villager (per-worker rate)
-        stonePitPerWorkerPerSecond: 0.05, // 0.05 Stone / sec per assigned villager per StonePit level
-        breadPerLevelPerSecond: 0.12,   // 0.12 Bread / sec per Farmhouse level
-        berriesPerWorkerPerSecond: 0.06,// 0.06 Berries / sec per Foragers worker * building level
-        meatPerWorkerPerSecond: 0.08,   // 0.08 Meat / sec per Hunting worker * building level
-        hidesPerWorkerPerSecond: 0.03   // 0.03 Hides / sec per Hunting worker * building level
+        timberPerWorkerPerSecond: 0.06,
+        stonePerLevelPerSecond: 0.25,
+        stonePitPerWorkerPerSecond: 0.05,
+        breadPerLevelPerSecond: 0.12,
+        berriesPerWorkerPerSecond: 0.06,
+        meatPerWorkerPerSecond: 0.08,
+        hidesPerWorkerPerSecond: 0.03
     };
 
-    const seconds = state.__lastTickSeconds || 1; // fallback if not provided
+    const seconds = state.__lastTickSeconds || 1;
 
-    // Logging Camp -> Timber (only when villagers are assigned)
+    // Helper: Production = (Base * Workers) * Level * 1.1^Level
+    const getOutput = (baseRate, level, workers = 1) => {
+        if (level <= 0) return 0;
+        return (baseRate * workers) * level * Math.pow(1.1, level) * seconds;
+    };
+
+    // Logging Camp -> Timber
     const loggingLevel = state.buildings['LoggingCamp'] || 0;
     const loggingAssigned = state.assignments['LoggingCamp'] || 0;
     if (loggingLevel > 0 && loggingAssigned > 0) {
-        // scale by building level and assigned workers
-        production[ResourceEnum.Timber] = (production[ResourceEnum.Timber] || 0) + (RATES.timberPerWorkerPerSecond * loggingLevel * loggingAssigned * seconds);
+        production[ResourceEnum.Timber] = (production[ResourceEnum.Timber] || 0) + getOutput(RATES.timberPerWorkerPerSecond, loggingLevel, loggingAssigned);
     }
 
     // Deep Mine -> Stone
     const mineLevel = state.buildings['DeepMine'] || 0;
     if (mineLevel > 0) {
-        production[ResourceEnum.Stone] = (production[ResourceEnum.Stone] || 0) + (mineLevel * RATES.stonePerLevelPerSecond * seconds);
+        production[ResourceEnum.Stone] = (production[ResourceEnum.Stone] || 0) + getOutput(RATES.stonePerLevelPerSecond, mineLevel, 1);
     }
 
-    // Stone Pit -> Surface Stone (early-game quarry) (requires assigned villagers)
+    // Stone Pit -> Stone
     const stonePitLevel = state.buildings['StonePit'] || 0;
     const stonePitAssigned = state.assignments['StonePit'] || 0;
     if (stonePitLevel > 0 && stonePitAssigned > 0) {
-        production[ResourceEnum.Stone] = (production[ResourceEnum.Stone] || 0) + (stonePitLevel * RATES.stonePitPerWorkerPerSecond * stonePitAssigned * seconds);
+        production[ResourceEnum.Stone] = (production[ResourceEnum.Stone] || 0) + getOutput(RATES.stonePitPerWorkerPerSecond, stonePitLevel, stonePitAssigned);
     }
 
     // Farmhouse -> Bread
     const farmLevel = state.buildings['Farmhouse'] || 0;
     if (farmLevel > 0) {
-        production[ResourceEnum.Bread] = (production[ResourceEnum.Bread] || 0) + (farmLevel * RATES.breadPerLevelPerSecond * seconds);
+        production[ResourceEnum.Bread] = (production[ResourceEnum.Bread] || 0) + getOutput(RATES.breadPerLevelPerSecond, farmLevel, 1);
     }
 
-    // ForagersHut -> Berries (per assigned villager)
+    // ForagersHut -> Berries
     const foragersLevel = state.buildings['ForagersHut'] || 0;
     const foragersAssigned = state.assignments['ForagersHut'] || 0;
     if (foragersLevel > 0 && foragersAssigned > 0) {
-        // scale by building level and assigned workers
-        production[ResourceEnum.Berries] = (production[ResourceEnum.Berries] || 0) + (RATES.berriesPerWorkerPerSecond * foragersLevel * foragersAssigned * seconds);
-        // small chance for random meat bonus scaled per tick (still coarse-grained)
+        production[ResourceEnum.Berries] = (production[ResourceEnum.Berries] || 0) + getOutput(RATES.berriesPerWorkerPerSecond, foragersLevel, foragersAssigned);
+        // Random meat bonus
         if (Math.random() < 0.02 * Math.min(1, foragersAssigned / 10)) {
             production[ResourceEnum.Meat] = (production[ResourceEnum.Meat] || 0) + 1;
         }
     }
 
-    // HuntingLodge -> Meat (per assigned villager)
+    // HuntingLodge -> Meat
     const huntingLevel = state.buildings['HuntingLodge'] || 0;
     const huntingAssigned = state.assignments['HuntingLodge'] || 0;
     if (huntingLevel > 0 && huntingAssigned > 0) {
-        production[ResourceEnum.Meat] = (production[ResourceEnum.Meat] || 0) + (RATES.meatPerWorkerPerSecond * huntingLevel * huntingAssigned * seconds);
-        // Hides are an advanced output unlocked at Hunting Lodge level 5
+        production[ResourceEnum.Meat] = (production[ResourceEnum.Meat] || 0) + getOutput(RATES.meatPerWorkerPerSecond, huntingLevel, huntingAssigned);
         if (huntingLevel >= 5) {
-            production[ResourceEnum.Hides] = (production[ResourceEnum.Hides] || 0) + (RATES.hidesPerWorkerPerSecond * huntingLevel * huntingAssigned * seconds);
+            production[ResourceEnum.Hides] = (production[ResourceEnum.Hides] || 0) + getOutput(RATES.hidesPerWorkerPerSecond, huntingLevel, huntingAssigned);
         }
     }
 
@@ -201,10 +201,19 @@ export function processTick(state, seconds = 1) {
 
     // 4. Process Queue
     if (state.queue.length > 0) {
-        const nowMs = Date.now();
-        // Process any completed items at front of queue (server authoritative)
-        while (state.queue.length > 0 && state.queue[0].completesAt && state.queue[0].completesAt <= nowMs) {
-            const item = state.queue[0];
+        // Process queue items by decrementing ticks
+        // We only process the first item in the queue (sequential build)
+        const item = state.queue[0];
+        
+        // Initialize ticksRemaining if missing (migration/safety)
+        if (typeof item.ticksRemaining === 'undefined') {
+             // Fallback: try to estimate from completesAt or just set to 1 to finish quickly
+             item.ticksRemaining = 1;
+        }
+
+        item.ticksRemaining -= (seconds || 1); // seconds here is actually ticks passed
+
+        if (item.ticksRemaining <= 0) {
             if (item.type === 'Building') {
                 state.buildings[item.id] = (state.buildings[item.id] || 0) + 1;
                 console.log(`Construction Complete: ${item.name} -> Lvl ${state.buildings[item.id]}`);
@@ -303,17 +312,30 @@ export function startConstruction(state, buildingId) {
         state.resources[res] -= amount;
     }
 
-    // Demo duration (seconds): set to a short but visible duration for progress display
-    const demoDuration = 60;
+    // Calculate Build Time (in ticks)
+    // calculateBuildTime returns "seconds" in standard speed, which maps 1:1 to ticks
+    const buildTicks = calculateBuildTime(buildingId, currentLevel);
     const now = Date.now();
+
+    // Determine a level-aware display name (prefer displayName or levelNames when present)
+    let levelDisplayName = config.displayName || config.name;
+    try {
+        if (config.levelNames && Array.isArray(config.levelNames)) {
+            const idx = Math.min(currentLevel + 1, Math.max(0, config.levelNames.length - 1));
+            levelDisplayName = config.levelNames[Math.max(0, Math.min(currentLevel + 1, config.levelNames.length - 1))] || levelDisplayName;
+        }
+    } catch (e) { /* ignore */ }
 
     state.queue.push({
         type: 'Building',
         id: buildingId,
-        name: `${config.name} Lvl ${currentLevel + 1}`,
-        totalTime: demoDuration,
-        startedAt: now,
-        completesAt: now + (demoDuration * 1000)
+        name: `${levelDisplayName} Lvl ${currentLevel + 1}`,
+        totalTicks: buildTicks,
+        totalTime: buildTicks, // seconds/ticks (kept for API compatibility)
+        ticksRemaining: buildTicks,
+        timeRemaining: buildTicks,
+        completesAt: now + (buildTicks * 1000),
+        startedAt: now // Keep for record keeping if needed
     });
 
     return { success: true, message: "Construction Started" };

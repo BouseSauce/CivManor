@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { getColorForIconClass, getIconForResource } from '../constants/iconMaps';
 import { BUILDING_CONFIG } from '../../core/config/buildings.js';
+import { GAME_CONFIG } from '../../core/config/gameConfig.js';
 import { GameClient } from '../api/client';
 import { useState, useEffect } from 'react';
 
@@ -22,7 +23,7 @@ export default function BuildingDetailPanel({ building, onClose, onAssignVillage
   const notBuilt = level < 1;
   const maxAssigned = Math.floor(3 + (level * 1.5));
   const disallowAssignments = building.id === 'TownHall' || (building.tags && building.tags.includes('housing'));
-  const buildLabel = level > 0 ? 'Upgrade' : 'Build';
+  const buildLabel = building && building.isUpgrading ? 'Upgrading' : (level > 0 ? 'Upgrade' : 'Build');
   const [upgradeSecs, setUpgradeSecs] = useState((building && building.upgradeSecondsRemaining) || null);
   const [localAssigned, setLocalAssigned] = useState(building.assigned || 0);
   const [showTownTooltip, setShowTownTooltip] = useState(false);
@@ -55,7 +56,7 @@ export default function BuildingDetailPanel({ building, onClose, onAssignVillage
     if (upgradeSecs == null) return;
     const id = setInterval(() => {
       setUpgradeSecs(s => (s > 0 ? s - 1 : 0));
-    }, 1000);
+    }, GAME_CONFIG.TICK_MS);
     return () => clearInterval(id);
   }, [upgradeSecs]);
 
@@ -209,7 +210,7 @@ export default function BuildingDetailPanel({ building, onClose, onAssignVillage
 
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>Upgrade
             {upgradeSecs != null && (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>&nbsp;• Time remaining: <span style={{ fontWeight: 700 }}>{upgradeSecs}s</span>{building.upgradeTotalTime ? ` • Total: ${building.upgradeTotalTime}s` : ''}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>&nbsp;• Time remaining: <span style={{ fontWeight: 700 }}>{Math.ceil(upgradeSecs * GAME_CONFIG.TICK_MS / 1000)}s</span>{building.upgradeTime ? ` • Total: ${Math.ceil(building.upgradeTime * GAME_CONFIG.TICK_MS / 1000)}s` : ''}</div>
             )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -224,6 +225,12 @@ export default function BuildingDetailPanel({ building, onClose, onAssignVillage
                   </div>
                 );
               })}
+              {building.upgradeTime && !building.isUpgrading && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '4px 6px', borderRadius: 6, background: 'rgba(0,0,0,0.03)' }}>
+                    <i className="fa-solid fa-clock" style={{ color: '#bbb' }} />
+                    <div style={{ fontWeight: 700, color: '#ddd' }}>{Math.ceil(building.upgradeTime * GAME_CONFIG.TICK_MS / 1000 / 60)}m</div>
+                  </div>
+              )}
             </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>

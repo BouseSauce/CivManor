@@ -10,7 +10,7 @@ export const BUILDING_CONFIG = {
         id: 'LoggingCamp', name: 'Logging Camp', displayName: 'Logging Camp', icon: 'fa-solid fa-tree', tier: 1, resourceTier: 'T1',
         category: 'Gathering', tags: ['gathering','resources','timber'],
         description: 'Produces Timber and provides basic firewood.',
-        growthFactor: 1.6, baseBuildTimeMinutes: 5,
+        growthFactor: 1.5, baseBuildTimeMinutes: 5,
         baseCost: { [ResourceEnum.Timber]: 20, [ResourceEnum.Stone]: 0 },
         unlocks: ['Timber']
     },
@@ -18,7 +18,7 @@ export const BUILDING_CONFIG = {
         id: 'Farmhouse', name: 'Farmhouse', displayName: 'Farmhouse', icon: 'fa-solid fa-wheat-awn', tier: 1, resourceTier: 'T1',
         category: 'Gathering', tags: ['gathering','food'],
         description: 'Core food production building.',
-        growthFactor: 1.6, baseBuildTimeMinutes: 10,
+        growthFactor: 1.5, baseBuildTimeMinutes: 10,
         baseCost: { [ResourceEnum.Timber]: 40, [ResourceEnum.Stone]: 10 },
         unlocks: ['Bread'],
         relatedTechs: ['Agriculture']
@@ -28,7 +28,7 @@ export const BUILDING_CONFIG = {
         id: 'ForagersHut', name: 'Foragers Hut', displayName: 'Foragers Hut', icon: 'fa-solid fa-leaf', tier: 1, resourceTier: 'Food',
         category: 'Gathering', tags: ['gathering','food'],
         description: 'Assign villagers to gather berries and simple wild foods.',
-        growthFactor: 1.2, baseBuildTimeMinutes: 6,
+        growthFactor: 1.5, baseBuildTimeMinutes: 6,
         baseCost: { [ResourceEnum.Timber]: 30, [ResourceEnum.Stone]: 5 },
         unlocks: ['Berries']
     },
@@ -36,7 +36,7 @@ export const BUILDING_CONFIG = {
         id: 'HuntingLodge', name: 'Hunting Lodge', displayName: 'Hunting Lodge', icon: 'fa-solid fa-dog', tier: 1, resourceTier: 'Food',
         category: 'Gathering', tags: ['gathering','food','meat'],
         description: 'Assign villagers to hunt game for meat; higher yield but requires more workers. Advanced hunting techniques unlock hides at higher lodge levels.',
-        growthFactor: 1.2, baseBuildTimeMinutes: 8,
+        growthFactor: 1.5, baseBuildTimeMinutes: 8,
         baseCost: { [ResourceEnum.Timber]: 40, [ResourceEnum.Stone]: 10 },
         // Meat is available immediately; hides are unlocked once Hunting Lodge reaches level 5
         unlocks: ['Meat'],
@@ -47,7 +47,7 @@ export const BUILDING_CONFIG = {
         id: 'StonePit', name: 'Stone Pit', displayName: 'Stone Pit', icon: 'fa-solid fa-mountain', tier: 1, resourceTier: 'T1',
         category: 'Gathering', tags: ['gathering','stone','resources'],
         description: 'Small surface quarry where villagers extract stone. Lower output than a Deep Mine but available early.',
-        growthFactor: 1.2, baseBuildTimeMinutes: 8,
+        growthFactor: 1.5, baseBuildTimeMinutes: 8,
         baseCost: { [ResourceEnum.Timber]: 40, [ResourceEnum.Stone]: 5 },
         unlocks: ['Stone']
     },
@@ -57,7 +57,7 @@ export const BUILDING_CONFIG = {
         id: 'Storehouse', name: 'Storehouse', displayName: 'Storehouse', icon: 'fa-solid fa-warehouse', tier: 2, resourceTier: 'Capacity',
         category: 'Economy', tags: ['economy','storage'],
         description: 'Increases storage capacity for all resources.',
-        growthFactor: 1.8, baseBuildTimeMinutes: 20,
+        growthFactor: 1.5, baseBuildTimeMinutes: 20,
         baseCost: { [ResourceEnum.Timber]: 100, [ResourceEnum.Stone]: 50 },
         unlocks: []
     },
@@ -65,7 +65,7 @@ export const BUILDING_CONFIG = {
         id: 'Granary', name: 'Granary', displayName: 'Granary', icon: 'fa-solid fa-jar-wheat', tier: 2, resourceTier: 'Food',
         category: 'Economy', tags: ['economy','storage','food'],
         description: 'Increases food capacity to stabilize population.',
-        growthFactor: 1.8, baseBuildTimeMinutes: 20,
+        growthFactor: 1.5, baseBuildTimeMinutes: 20,
         baseCost: { [ResourceEnum.Timber]: 80, [ResourceEnum.Stone]: 20 },
         unlocks: []
     },
@@ -108,7 +108,7 @@ export const BUILDING_CONFIG = {
         id: 'WagonWorkshop', name: 'Wagon Workshop', displayName: 'Wagon Workshop', icon: 'fa-solid fa-cart-flatbed', tier: 2, resourceTier: 'T2',
         category: 'Industry', tags: ['industry','transport','trade'],
         description: 'Produces wagons and Trade Carts.',
-        growthFactor: 1.4, baseBuildTimeMinutes: 25,
+        growthFactor: 1.5, baseBuildTimeMinutes: 25,
         baseCost: { [ResourceEnum.Timber]: 120, [ResourceEnum.Stone]: 40 },
         unlocks: ['TradeCart']
     },
@@ -118,7 +118,7 @@ export const BUILDING_CONFIG = {
         id: 'Sawpit', name: 'Sawpit', displayName: 'Sawpit', icon: 'fa-solid fa-screwdriver-wrench', tier: 2, resourceTier: 'T2',
         category: 'Industry', tags: ['industry','processing','timber'],
         description: 'Converts Timber into Planks (T2).',
-        growthFactor: 1.4, baseBuildTimeMinutes: 25,
+        growthFactor: 1.5, baseBuildTimeMinutes: 25,
         baseCost: { [ResourceEnum.Timber]: 150, [ResourceEnum.Stone]: 50 },
         unlocks: ['Planks'],
         relatedTechs: ['Basic Tools']
@@ -127,7 +127,7 @@ export const BUILDING_CONFIG = {
         id: 'Tannery', name: 'Tannery', displayName: 'Tannery', icon: 'fa-solid fa-shirt', tier: 2, resourceTier: 'T2',
         category: 'Industry', tags: ['industry','processing','leather'],
         description: 'Processes hides into leather used for components.',
-        growthFactor: 1.4, baseBuildTimeMinutes: 30,
+        growthFactor: 1.5, baseBuildTimeMinutes: 30,
         baseCost: { [ResourceEnum.Timber]: 80, [ResourceEnum.Stone]: 30 },
         unlocks: ['Leather'],
         relatedTechs: ['Basic Tools']
@@ -136,7 +136,7 @@ export const BUILDING_CONFIG = {
         id: 'Smithy', name: 'Smithy', displayName: 'Smithy', icon: 'fa-solid fa-fire-burner', tier: 2, resourceTier: 'T2',
         category: 'Industry', tags: ['industry','military','weapons'],
         description: 'Produces simple military components (Spears, Bows). Upgrading unlocks advanced outputs.',
-        growthFactor: 1.4, baseBuildTimeMinutes: 40,
+        growthFactor: 1.5, baseBuildTimeMinutes: 40,
         baseCost: { [ResourceEnum.Timber]: 300, [ResourceEnum.IronOre]: 100 },
         unlocks: ['SimpleSpear'],
         relatedTechs: ['Basic Tools']
@@ -147,7 +147,7 @@ export const BUILDING_CONFIG = {
         id: 'DeepMine', name: 'Deep Mine', displayName: 'Deep Mine', icon: 'fa-solid fa-gem', tier: 3, resourceTier: 'T3',
         category: 'Gathering', tags: ['gathering','mining','iron'],
         description: 'Extracts Iron Ore and Coal. High-level upgrades require Tools.',
-        growthFactor: 1.6, baseBuildTimeMinutes: 40,
+        growthFactor: 1.5, baseBuildTimeMinutes: 40,
         baseCost: { [ResourceEnum.Timber]: 200, [ResourceEnum.Stone]: 100 },
         unlocks: ['IronOre','Coal'],
         relatedTechs: ['Mining Operations']
@@ -156,7 +156,7 @@ export const BUILDING_CONFIG = {
         id: 'Bloomery', name: 'Bloomery', displayName: 'Bloomery', icon: 'fa-solid fa-fire', tier: 3, resourceTier: 'T3',
         category: 'Industry', tags: ['industry','smelting'],
         description: 'Smelts Iron Ore into usable ingots.',
-        growthFactor: 1.4, baseBuildTimeMinutes: 50,
+        growthFactor: 1.5, baseBuildTimeMinutes: 50,
         baseCost: { [ResourceEnum.Timber]: 200, [ResourceEnum.Stone]: 120 },
         unlocks: ['Ingots'],
         relatedTechs: ['Smelting']
@@ -167,7 +167,7 @@ export const BUILDING_CONFIG = {
         id: 'University', name: 'University', displayName: 'University', icon: 'fa-solid fa-graduation-cap', tier: 4, resourceTier: 'T4',
         category: 'Industry', tags: ['industry','research','knowledge'],
         description: 'Generates Knowledge; required for advanced T4 techs.',
-        growthFactor: 1.3, baseBuildTimeMinutes: 120,
+        growthFactor: 1.5, baseBuildTimeMinutes: 120,
         baseCost: { [ResourceEnum.Timber]: 500, [ResourceEnum.Stone]: 400, [ResourceEnum.Gold]: 100 },
         unlocks: ['Knowledge']
     },
@@ -175,7 +175,7 @@ export const BUILDING_CONFIG = {
         id: 'BlastFurnace', name: 'Blast Furnace', displayName: 'Blast Furnace', icon: 'fa-solid fa-industry', tier: 4, resourceTier: 'T4',
         category: 'Industry', tags: ['industry','smelting','steel'],
         description: 'Converts ingots into Steel (T4).',
-        growthFactor: 1.3, baseBuildTimeMinutes: 90,
+        growthFactor: 1.5, baseBuildTimeMinutes: 90,
         baseCost: { [ResourceEnum.Timber]: 400, [ResourceEnum.Stone]: 300, [ResourceEnum.Gold]: 50 },
         unlocks: ['Steel'],
         relatedTechs: ['Advanced Metallurgy']
@@ -184,7 +184,7 @@ export const BUILDING_CONFIG = {
         id: 'SiegeWorkshop', name: 'Siege Workshop', displayName: 'Siege Workshop', icon: 'fa-solid fa-chess-rook', tier: 4, resourceTier: 'Warfare',
         category: 'Military', tags: ['military','warfare','siege'],
         description: 'Constructs siege weapons (Trebuchet) and advanced components.',
-        growthFactor: 1.3, baseBuildTimeMinutes: 80,
+        growthFactor: 1.5, baseBuildTimeMinutes: 80,
         baseCost: { [ResourceEnum.Timber]: 400, [ResourceEnum.Stone]: 200 },
         unlocks: ['Trebuchet'],
         relatedTechs: ['Geometry & Physics']
@@ -193,7 +193,7 @@ export const BUILDING_CONFIG = {
         id: 'DiplomaticQuarter', name: 'Diplomatic Quarter', displayName: 'Diplomatic Quarter', icon: 'fa-solid fa-scroll', tier: 4, resourceTier: 'Special',
         category: 'Economy', tags: ['economy','diplomacy'],
         description: 'Enables alliances, pacts and diplomatic actions.',
-        growthFactor: 1.3, baseBuildTimeMinutes: 75,
+        growthFactor: 1.5, baseBuildTimeMinutes: 75,
         baseCost: { [ResourceEnum.Timber]: 300, [ResourceEnum.Stone]: 300, [ResourceEnum.Gold]: 50 },
         unlocks: [],
         relatedTechs: ['Diplomacy']

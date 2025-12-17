@@ -1,5 +1,6 @@
 import React from 'react';
 import { getIconForResource } from '../constants/iconMaps';
+import { GAME_CONFIG } from '../../core/config/gameConfig.js';
 
 export default function ResearchCard({ id, def = {}, researched = false, active = null, onStart, area }) {
   const costEntries = Object.entries(def.cost || {});
@@ -51,7 +52,7 @@ export default function ResearchCard({ id, def = {}, researched = false, active 
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{def.durationSeconds ? `${def.durationSeconds}s` : ''}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{def.durationSeconds ? `${Math.ceil(def.durationSeconds * GAME_CONFIG.TICK_MS / 1000)}s` : ''}</div>
         <div>
           {isLocked && <button className="btn" disabled style={{ opacity: 0.6 }}>Locked</button>}
           {!isLocked && !researched && !inProgress && (
