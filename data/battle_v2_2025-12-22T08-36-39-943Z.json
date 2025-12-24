@@ -1,0 +1,176 @@
+{
+  "winner": "Draw",
+  "rounds": 9,
+  "attackerRemaining": [
+    {
+      "id": "Archer",
+      "count": 73
+    }
+  ],
+  "defenderRemaining": [
+    {
+      "id": "Knights",
+      "count": 20
+    }
+  ],
+  "salvagePool": {
+    "Timber": 243,
+    "IronIngot": 81
+  },
+  "insights": "The battle resulted in a bloody stalemate after 9 rounds. The Attacker's heavy use of Ranged units was punished by the Defender's Cavalry.",
+  "log": [
+    {
+      "round": 1,
+      "attackerRemaining": {
+        "Archer": 97
+      },
+      "defenderRemaining": {
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Archer": 3
+      },
+      "defenderLosses": {},
+      "damageDealt": {
+        "attacker": 75,
+        "defender": 160
+      }
+    },
+    {
+      "round": 2,
+      "attackerRemaining": {
+        "Archer": 94
+      },
+      "defenderRemaining": {
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Archer": 3
+      },
+      "defenderLosses": {},
+      "damageDealt": {
+        "attacker": 72.75,
+        "defender": 160
+      }
+    },
+    {
+      "round": 3,
+      "attackerRemaining": {
+        "Archer": 91
+      },
+      "defenderRemaining": {
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Archer": 3
+      },
+      "defenderLosses": {},
+      "damageDealt": {
+        "attacker": 70.5,
+        "defender": 160
+      }
+    },
+    {
+      "round": 4,
+      "attackerRemaining": {
+        "Archer": 88
+      },
+      "defenderRemaining": {
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Archer": 3
+      },
+      "defenderLosses": {},
+      "damageDealt": {
+        "attacker": 68.25,
+        "defender": 160
+      }
+    },
+    {
+      "round": 5,
+      "attackerRemaining": {
+        "Archer": 85
+      },
+      "defenderRemaining": {
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Archer": 3
+      },
+      "defenderLosses": {},
+      "damageDealt": {
+        "attacker": 66,
+        "defender": 160
+      }
+    },
+    {
+      "round": 6,
+      "attackerRemaining": {
+        "Archer": 82
+      },
+      "defenderRemaining": {
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Archer": 3
+      },
+      "defenderLosses": {},
+      "damageDealt": {
+        "attacker": 63.75,
+        "defender": 160
+      }
+    },
+    {
+      "round": 7,
+      "attackerRemaining": {
+        "Archer": 79
+      },
+      "defenderRemaining": {
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Archer": 3
+      },
+      "defenderLosses": {},
+      "damageDealt": {
+        "attacker": 61.5,
+        "defender": 160
+      }
+    },
+    {
+      "round": 8,
+      "attackerRemaining": {
+        "Archer": 76
+      },
+      "defenderRemaining": {
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Archer": 3
+      },
+      "defenderLosses": {},
+      "damageDealt": {
+        "attacker": 59.25,
+        "defender": 160
+      }
+    },
+    {
+      "round": 9,
+      "attackerRemaining": {
+        "Archer": 73
+      },
+      "defenderRemaining": {
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Archer": 3
+      },
+      "defenderLosses": {},
+      "damageDealt": {
+        "attacker": 57,
+        "defender": 160
+      }
+    }
+  ]
+}

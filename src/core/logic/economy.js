@@ -1,8 +1,12 @@
 import { FOOD_SUSTENANCE_VALUES } from '../config/food.js';
+import { WORLD_CONFIG } from '../config/worlds.js';
+
+// Population growth multiplier: can be tuned via WORLD_CONFIG.popGrowth or env var POP_MULT
+export const POP_GROWTH_MULTIPLIER = (WORLD_CONFIG && typeof WORLD_CONFIG.popGrowth === 'number') ? WORLD_CONFIG.popGrowth : ((typeof process !== 'undefined' && process.env.POP_MULT) ? Number(process.env.POP_MULT) : 5.0);
 
 // Base sustenance per villager per second.
 // Set so each villager consumes ~20 food units per hour: 20 / 3600 seconds.
-export const SUSTENANCE_PER_POP_PER_SECOND = 20 / 3600;
+export const SUSTENANCE_PER_POP_PER_SECOND = 1 / 3600; // 1 food per citizen per hour
 
 /**
  * Calculates Approval Score (0-100%).
@@ -57,17 +61,36 @@ export function calculateApproval(pop, capacity, foodVariety, taxRate, hasFirewo
 }
 
 /**
+ * Calculates gold income per second from taxation.
+ * Simple formula: Gold/sec = population * taxRate * (GOLD_PER_POP_PER_HOUR / 3600)
+ * Tune `GOLD_PER_POP_PER_HOUR` to adjust yield.
+ */
+export function calculateTaxIncome(pop, taxRate, townHallLevel = 0) {
+    const GOLD_PER_POP_PER_HOUR = 0.5; // baseline gold per pop per hour at 0 town hall
+    // Town Hall increases tax efficiency: +10% gold per TH level
+    const thMultiplier = 1 + (Math.max(0, townHallLevel) * 0.10);
+    const perSecond = (GOLD_PER_POP_PER_HOUR * thMultiplier) / 3600;
+    return (pop || 0) * (taxRate || 0) * perSecond;
+}
+
+/**
  * Processes population changes based on food and approval.
  * 
  * @param {number} pop - Current population
  * @param {Object} foodStocks - Dictionary of food resources { [ResourceEnum.Meat]: 100, ... }
  * @param {number} approval - Current approval score (0-100)
+ * @param {number} townHallLevel - Level of Town Hall
+ * @param {number} housingCap - Current housing capacity
+ * @param {number} captives - Count of captives
+ * @param {number} seconds - Seconds passed since last tick
+ * @param {Object} stateObj - State object to store fractional growth
+ * @param {number} growthMultiplier - Multiplier for population growth (default 1.0)
  * @returns {Object} - { newPop, consumedFood, starvationDeaths }
  */
-export function processPopulationTick(pop, foodStocks, approval) {
+export function processPopulationTick(pop, foodStocks, approval, townHallLevel = 1, housingCap = 100, captives = 0, seconds = 1, stateObj = null, growthMultiplier = 1.0) {
     // 1. Calculate Total Sustenance Needed
     // Each villager consumes `SUSTENANCE_PER_POP_PER_SECOND` sustenance units per tick (tick = 1s)
-    const sustenanceNeeded = pop * SUSTENANCE_PER_POP_PER_SECOND;
+    const sustenanceNeeded = (pop * SUSTENANCE_PER_POP_PER_SECOND) + (captives * (0.5 / 3600));
     let sustenanceAvailable = 0;
     
     // Calculate available sustenance from stocks
@@ -81,11 +104,20 @@ export function processPopulationTick(pop, foodStocks, approval) {
     const consumedFood = {}; // Track what was eaten
 
     // 2. Starvation Logic
-    if (sustenanceAvailable < sustenanceNeeded) {
-        // 5% Starvation Death Penalty
-        starvationDeaths = Math.floor(pop * 0.05);
+    if (sustenanceAvailable <= 0) {
+        // No food at all: apply starvation death at 1% per hour scaled to tick seconds
+        const deathsPerHour = 0.01; // 1% per hour
+        starvationDeaths = Math.floor(pop * deathsPerHour * (seconds / 3600));
         newPop -= starvationDeaths;
-        
+        // nothing to consume
+    } else if (sustenanceAvailable < sustenanceNeeded) {
+        // Partial food: consume what we have and apply proportional starvation
+        // Compute fraction of need met
+        const fraction = sustenanceAvailable / Math.max(1, sustenanceNeeded);
+        // Proportional deaths scaled: up to 1% per hour when fully unfed
+        const deathsPerHour = 0.01 * (1 - fraction);
+        starvationDeaths = Math.floor(pop * deathsPerHour * (seconds / 3600));
+        newPop -= starvationDeaths;
         // Consume ALL food
         for (const type of Object.keys(foodStocks)) {
             consumedFood[type] = foodStocks[type];
@@ -114,25 +146,64 @@ export function processPopulationTick(pop, foodStocks, approval) {
         }
     }
 
-    // 3. Growth/Decline based on Approval
-    // New rule: if approval >= 50%, population grows. Growth scales per 10% above 50%.
-    // - Base growth: 1% at 50%
-    // - For each full 10% above 50 add +1% (e.g., 60% -> 2%, 70% -> 3%, ...)
-    // - Minimum growth is +1 person per tick when growth applies.
-    if (approval >= 50) {
-        const extraTens = Math.floor((approval - 50) / 10); // 0 for 50-59, 1 for 60-69, etc.
-        const growthRate = 0.01 * (1 + Math.max(0, extraTens));
-        const growth = Math.max(1, Math.floor(pop * growthRate));
-        newPop += growth;
-    } else if (approval < 25) {
-        // Decline unchanged: 2% leaving
-        const decline = Math.max(1, Math.floor(pop * 0.02));
-        newPop -= decline;
-    }
+        // 3. Growth based on Town Hall level & Approval
+        // Formula: Growth = (BaseRate * TownHallLvl) * ApprovalModifier
+        // BaseRate = 0.1 citizens per TownHall level (per hour)
+        const baseRatePerHour = 0.1 * Math.max(0, townHallLevel);
+        const approvalModifier = Math.max(0, Math.min(100, approval)) / 100.0;
+        // Apply research-derived timer multiplier:
+        // New spawn timer = BaseTimer / (1 + (ResearchLevel * 0.1)) => growth rate multiplies by (1 + ResearchLevel*0.1)
+        let researchTimerMultiplier = 1.0;
+        try {
+            if (stateObj && stateObj.techLevels) {
+                const sanLvl = stateObj.techLevels['Sanitation Works'] || 0;
+                const basicSanLvl = stateObj.techLevels['Basic Sanitation'] || 0;
+                const medLvl = stateObj.techLevels['Medical Alchemy'] || 0;
+                const fertLvl = stateObj.techLevels['Fertility Festivals'] || 0;
+                
+                const total = (sanLvl * 0.1) + (medLvl * 0.1) + (basicSanLvl * 0.02) + (fertLvl * 0.25);
+                if (total > 0) researchTimerMultiplier = 1 + total;
+            }
+        } catch (e) { /* ignore */ }
+
+        let growthPerHour = baseRatePerHour * approvalModifier * POP_GROWTH_MULTIPLIER * growthMultiplier * researchTimerMultiplier;
+        // If the area has sufficient sustenance, ensure a minimum growth rate so players see progress.
+        try {
+            if (sustenanceAvailable >= sustenanceNeeded) {
+                const MIN_GROWTH_PER_HOUR = 5; // ensure at least +5 villagers per hour when fed
+                growthPerHour = Math.max(growthPerHour, MIN_GROWTH_PER_HOUR);
+            }
+        } catch (e) { /* ignore */ }
+        const growth = growthPerHour * (seconds / 3600);
+        // Accumulate fractional growth across ticks using stateObj._popGrowRemainder if provided
+        let remainder = 0;
+        if (stateObj && typeof stateObj._popGrowRemainder === 'number') remainder = stateObj._popGrowRemainder || 0;
+        const total = remainder + growth;
+        const growthInt = Math.floor(total);
+        if (growthInt > 0) newPop += growthInt;
+        const newRemainder = total - growthInt;
+        if (stateObj) stateObj._popGrowRemainder = newRemainder;
+
+        // If approval is 0, apply a small emigration rate (1% per hour)
+        if (approval <= 0) {
+            const emigPerHour = 0.01;
+            const emig = Math.floor(pop * emigPerHour * (seconds / 3600));
+            newPop = Math.max(0, newPop - emig);
+        }
+
+        // Enforce housing cap
+        if (housingCap > 0 && newPop > housingCap) {
+            // clamp population to housing cap (no overgrowth beyond cap)
+            newPop = housingCap;
+        }
+
+    // Captive morbidity: 2% death per hour (reduced by tech elsewhere)
+    const captiveDeaths = Math.floor(captives * 0.02 * (seconds / 3600));
 
     return {
         newPop,
         consumedFood,
-        starvationDeaths
+        starvationDeaths,
+        captiveDeaths
     };
 }

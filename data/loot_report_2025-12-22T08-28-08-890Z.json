@@ -1,0 +1,45 @@
+{
+  "sourceReport": "data\\battle_report_2025-12-22T08-20-42-149Z.json",
+  "defenderHoldings": {
+    "Timber": 10000,
+    "Stone": 10000,
+    "Ore": 10000,
+    "IronIngot": 10000,
+    "Gold": 10000
+  },
+  "salvageFromBattle": {
+    "Timber": 39,
+    "Stone": 29,
+    "Ore": 12,
+    "IronIngot": 6,
+    "Gold": 2
+  },
+  "maxLootPercent": 0.2,
+  "banditContext": {
+    "isBandit": true,
+    "attackerScore": null,
+    "defenderScore": null,
+    "ownBaseFlag": false
+  },
+  "lootTaken": {
+    "Timber": 2039,
+    "Stone": 2029,
+    "Ore": 2012,
+    "IronIngot": 2006,
+    "Gold": 2002
+  },
+  "townAfter": {
+    "Timber": 8000,
+    "Stone": 8000,
+    "Ore": 8000,
+    "IronIngot": 8000,
+    "Gold": 8000
+  },
+  "attackerHaul": {
+    "Timber": 2039,
+    "Stone": 2029,
+    "Ore": 2012,
+    "IronIngot": 2006,
+    "Gold": 2002
+  }
+}

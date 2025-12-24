@@ -2,36 +2,54 @@ import React, { useState } from 'react';
 import BuildingCard from './BuildingCard';
 import BuildingDetailPanel from './BuildingDetailPanel';
 
-export default function EconomyPanel({ buildings = [], onUpgrade }) {
+export default function EconomyPanel({ area = null, buildings = [], onUpgrade, onAssign }) {
   const [selectedBuilding, setSelectedBuilding] = useState(null);
+
+  // Keep selected building fresh when buildings prop updates
+  React.useEffect(() => {
+    if (selectedBuilding) {
+      const fresh = buildings.find(b => b.id === selectedBuilding.id);
+      if (fresh) setSelectedBuilding(fresh);
+    }
+  }, [buildings, selectedBuilding?.id]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div className='panel'>
-        <div className='panel-header'>
-          <h3 style={{ margin: 0, fontFamily: 'var(--font-header)', color: 'var(--accent-gold)' }}>
-            <i className='fa-solid fa-coins' style={{ marginRight: 8 }}></i>Economy Overview
+      <div className='panel' style={{ background: 'none', border: 'none', boxShadow: 'none', padding: 0 }}>
+        <div className='panel-header' style={{ background: 'none', border: 'none', padding: '0 0 12px 0', borderBottom: '2px solid var(--wood-dark)' }}>
+          <h3 className="font-cinzel" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.6rem', fontWeight: 700 }}>
+            <i className='fa-solid fa-coins' style={{ marginRight: 12 }}></i>Economy Overview
           </h3>
         </div>
-        <div className='panel-body'>
-          <div style={{ color: 'var(--text-muted)', padding: 8 }}>Economic buildings manage markets, trade and taxation.</div>
+        <div className='panel-body' style={{ padding: '12px 0' }}>
+          <div className="font-garamond" style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>Economic buildings manage markets, trade and taxation.</div>
         </div>
       </div>
 
       <div>
-        <h3 style={{ fontFamily: 'var(--font-header)', color: 'var(--text-light)', borderBottom: '1px solid var(--border-color)', paddingBottom: 8, marginBottom: 12 }}>Economic Buildings</h3>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', 
+          gap: 20,
+          width: '100%',
+          margin: '0 auto'
+        }}>
           {buildings.map(b => (
             <BuildingCard key={b.id} b={b} onOpen={setSelectedBuilding} onUpgrade={onUpgrade} />
           ))}
           {buildings.length === 0 && (
-            <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No economic buildings present.</div>
+            <div className="font-garamond" style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '1.1rem' }}>No economic buildings present.</div>
           )}
         </div>
       </div>
 
-      <BuildingDetailPanel building={selectedBuilding} onClose={() => setSelectedBuilding(null)} onUpgrade={(id) => { onUpgrade && onUpgrade(id); setSelectedBuilding(null); }} />
+      <BuildingDetailPanel 
+        building={selectedBuilding} 
+        area={area} 
+        onClose={() => setSelectedBuilding(null)} 
+        onUpgrade={(id) => { onUpgrade && onUpgrade(id); setSelectedBuilding(null); }} 
+        onAssignVillagers={(id, count) => { return onAssign ? onAssign(id, count) : Promise.resolve(); }}
+      />
     </div>
   );
 }

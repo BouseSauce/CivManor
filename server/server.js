@@ -6,14 +6,24 @@ import crypto from 'crypto';
 import { promises as fsp } from 'fs';
 import { processTick, AreaState, startConstruction } from '../src/core/gameLoop.js';
 import bcrypt from 'bcryptjs';
-import { BUILDING_CONFIG, BUILDING_PREREQS } from '../src/core/config/buildings.js';
+import { BUILDING_CONFIG } from '../src/core/config/buildings.js';
 import { evaluatePrereqs } from '../src/core/validation/buildingPrereqs.js';
-import { calculateUpgradeCost, calculateBuildTime } from '../src/core/logic/scaling.js';
 import { ResourceEnum, UnitTypeEnum } from '../src/core/constants/enums.js';
 import { FOOD_SUSTENANCE_VALUES } from '../src/core/config/food.js';
 import { SUSTENANCE_PER_POP_PER_SECOND } from '../src/core/logic/economy.js';
 import { GAME_CONFIG } from '../src/core/config/gameConfig.js';
-import { PRODUCTION_RATES, PRODUCTION_GROWTH, WORKER_EXP, PRODUCTION_GLOBAL_MULTIPLIER } from '../src/core/config/production.js';
+import { PRODUCTION_RATES, PRODUCTION_GROWTH, WORKER_EXP, PRODUCTION_GLOBAL_MULTIPLIER } from '../src/core/config/production_fixed.js';
+import { WORLD_CONFIG } from '../src/core/config/worlds.js';
+import { RESEARCH_DEFS, ALL_RESEARCH } from '../src/core/config/research.js';
+import { UNIT_CONFIG, getUnitConfig } from '../src/core/config/units.js';
+import { calculateUpgradeCost, calculateBuildTime, calculateResearchCost, calculateResearchTime } from '../src/core/logic/scaling.js';
+import { resolveBattle } from '../src/core/logic/military.js';
+import { 
+    calculateIntelDepth, 
+    getDetectionRadius, 
+    getArmySizeLabel, 
+    calculateEffectiveSpyLevel 
+} from '../src/core/logic/espionage.js';
 
 // Basic server and runtime state initialization
 const __filename = fileURLToPath(import.meta.url);
@@ -41,6 +51,174 @@ const savedAreaOwners = {};
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DATA_FILE = path.join(DATA_DIR, 'game_save.json');
 
+// Helper: compute travel ticks based on simple distance heuristic and unit speeds
+function parseAreaId(areaId) {
+    // Expect format like R1:A3 or R12:A34
+    if (!areaId || typeof areaId !== 'string') return null;
+    const m = areaId.match(/^R(\d+):A(\d+)$/);
+    if (!m) return null;
+    return { region: parseInt(m[1], 10), index: parseInt(m[2], 10) };
+}
+
+function getWatchDirection(originId, targetId) {
+    const o = parseAreaId(originId);
+    const t = parseAreaId(targetId);
+    if (!o || !t) return 'Unknown';
+    
+    const dr = (t.region || 0) - (o.region || 0);
+    const di = (t.index || 0) - (o.index || 0);
+    
+    if (dr === 0 && di === 0) return 'Stationary';
+    
+    // Simple 8-way direction
+    if (dr > 0) {
+        if (di > 0) return 'South-East';
+        if (di < 0) return 'South-West';
+        return 'South';
+    } else if (dr < 0) {
+        if (di > 0) return 'North-East';
+        if (di < 0) return 'North-West';
+        return 'North';
+    } else {
+        if (di > 0) return 'East';
+        return 'West';
+    }
+}
+
+function processProximityAlerts(allAreaStates) {
+    // 1. Collect all active missions
+    const activeMissions = [];
+    for (const [areaId, state] of Object.entries(allAreaStates)) {
+        if (state.missions) {
+            state.missions.forEach(m => {
+                if (m.status === 'Traveling' || m.status === 'Returning') {
+                    activeMissions.push(m);
+                }
+            });
+        }
+    }
+
+    // 2. For each area, check if any mission is within its detection radius
+    for (const [areaId, state] of Object.entries(allAreaStates)) {
+        const guildLevel = state.buildings['ShadowGuild'] || 0;
+        const assignedSpies = state.assignments['ShadowGuild'] || 0;
+        const effectiveSpyLevel = calculateEffectiveSpyLevel(guildLevel, assignedSpies);
+        const radius = getDetectionRadius(effectiveSpyLevel);
+
+        if (radius <= 0) {
+            state.proximityAlerts = [];
+            continue;
+        }
+
+        const areaCoords = parseAreaId(areaId);
+        if (!areaCoords) continue;
+
+        // Clear old alerts (keep only recent ones or manage by missionId)
+        state.proximityAlerts = state.proximityAlerts || [];
+        const currentMissionIds = new Set();
+
+        activeMissions.forEach(m => {
+            // Don't detect own missions
+            if (m.originAreaId === areaId) return;
+
+            const originCoords = parseAreaId(m.originAreaId);
+            const targetCoords = parseAreaId(m.targetAreaId);
+            if (!originCoords || !targetCoords) return;
+
+            const progress = 1 - (m.ticksRemaining / m.totalTicks);
+            const currentRegion = originCoords.region + (targetCoords.region - originCoords.region) * progress;
+            const currentIndex = originCoords.index + (targetCoords.index - originCoords.index) * progress;
+
+            // Distance to area (using the same heuristic as computeTravelTicks)
+            const distRegion = Math.abs(currentRegion - areaCoords.region);
+            const distIndex = Math.abs(currentIndex - areaCoords.index);
+            const distance = (distRegion * 8) + distIndex;
+
+            if (distance <= radius) {
+                currentMissionIds.add(m.id);
+                const direction = getWatchDirection(areaId, m.targetAreaId);
+                const unitCount = Object.values(m.units).reduce((a, b) => a + b, 0);
+                const sizeLabel = getArmySizeLabel(unitCount);
+                
+                const alertMsg = `Movement detected to the ${direction}! (${sizeLabel} force)`;
+                
+                // Update or add alert
+                const existing = state.proximityAlerts.find(a => a.missionId === m.id);
+                if (existing) {
+                    existing.message = alertMsg;
+                    existing.distance = distance;
+                    existing.direction = direction;
+                    existing.timestamp = Date.now();
+                } else {
+                    state.proximityAlerts.push({
+                        id: crypto.randomUUID(),
+                        missionId: m.id,
+                        message: alertMsg,
+                        timestamp: Date.now(),
+                        direction,
+                        sizeLabel,
+                        distance
+                    });
+                }
+            }
+        });
+
+        // Remove alerts for missions no longer in range
+        state.proximityAlerts = state.proximityAlerts.filter(a => currentMissionIds.has(a.missionId));
+    }
+}
+
+function computeGroupSpeed(units) {
+    // Determine group movement speed: use slowest unit (min speed), default 1.0
+    let minSpeed = Infinity;
+    let found = false;
+    Object.entries(units || {}).forEach(([ut, cnt]) => {
+        if (!cnt) return;
+        const cfg = UNIT_CONFIG[ut];
+        const s = (cfg && cfg.speed) ? cfg.speed : 1.0;
+        if (s < minSpeed) minSpeed = s;
+        found = true;
+    });
+    if (!found) return 1.0;
+    return (minSpeed === Infinity) ? 1.0 : minSpeed;
+}
+
+function calculateDistance(originId, targetId) {
+    const o = parseAreaId(originId);
+    const t = parseAreaId(targetId);
+    if (!o || !t) return 10;
+    const regionDist = Math.abs((o.region || 0) - (t.region || 0));
+    const areaDist = Math.abs((o.index || 0) - (t.index || 0));
+    return (regionDist * 8) + areaDist;
+}
+
+function computeTravelTicks(originId, targetId, units) {
+    // Heuristic distance: region difference scaled + area index difference
+    const o = parseAreaId(originId);
+    const t = parseAreaId(targetId);
+    // Base ticks per tile step
+    const BASE_TICKS_PER_STEP = 6; // configurable: 6 ticks per step ~ example
+    // If we can parse both ids, compute a simple Manhattan-like metric between region/index
+    let distanceFactor = 1;
+    if (o && t) {
+        const regionDist = Math.abs((o.region || 0) - (t.region || 0));
+        const areaDist = Math.abs((o.index || 0) - (t.index || 0));
+        // Give region changes more weight (regions are farther apart)
+        distanceFactor = (regionDist * 8) + areaDist;
+        if (distanceFactor <= 0) distanceFactor = 1;
+    } else {
+        // Fallback: use default medium distance
+        distanceFactor = 10;
+    }
+
+    const groupSpeed = computeGroupSpeed(units) || 1.0;
+    const worldSpeed = (WORLD_CONFIG && WORLD_CONFIG.armySpeed) ? WORLD_CONFIG.armySpeed : 1.0;
+
+    // Lower ticks for faster units/worldSpeed. Ensure at least 1 tick.
+    const raw = Math.max(1, Math.ceil((distanceFactor * BASE_TICKS_PER_STEP) / (groupSpeed * worldSpeed)));
+    return raw;
+}
+
 // Initialize Game State for demo ownerless area (you can claim later)
 const gameState = new AreaState('Iron Forge');
 
@@ -50,6 +228,7 @@ function serializeAreaState(state) {
         name: state.name,
         tickCount: state.tickCount,
         resources: state.resources,
+        salvagePool: state.salvagePool || {},
         population: state.population,
         housingCapacity: state.housingCapacity,
         taxRate: state.taxRate,
@@ -58,6 +237,7 @@ function serializeAreaState(state) {
         buildings: state.buildings,
         units: state.units,
         assignments: state.assignments,
+        missions: state.missions || [],
         idleReasons: state.idleReasons || {},
         queue: state.queue
     };
@@ -67,6 +247,7 @@ function restoreAreaState(obj) {
     const s = new AreaState(obj.name, obj.housingCapacity || 100);
     s.tickCount = obj.tickCount || 0;
     s.resources = obj.resources || s.resources;
+    s.salvagePool = obj.salvagePool || {};
     s.population = obj.population || s.population;
     s.housingCapacity = obj.housingCapacity || s.housingCapacity;
     s.taxRate = obj.taxRate || s.taxRate;
@@ -75,6 +256,7 @@ function restoreAreaState(obj) {
     s.buildings = obj.buildings || s.buildings;
     s.units = obj.units || s.units;
     s.assignments = obj.assignments || s.assignments;
+    s.missions = obj.missions || [];
     s.idleReasons = obj.idleReasons || {};
     s.queue = obj.queue || s.queue;
     return s;
@@ -214,7 +396,9 @@ async function loadGameState() {
 
 // Start Game Loop (per-second ticks) with enhanced logging
 let TICK_NUMBER = 0;
-const TICK_MS = GAME_CONFIG.TICK_MS; 
+// Prefer world-level tick setting when available so different worlds can have
+// independent pacing. Fall back to the global GAME_CONFIG value.
+const TICK_MS = (WORLD_CONFIG && typeof WORLD_CONFIG.tickMs === 'number') ? WORLD_CONFIG.tickMs : GAME_CONFIG.TICK_MS;
 // Load persisted state (if any) then start tick loop
 loadGameState().then(() => {
     // If no explicit world data was loaded, build a minimal world from persisted `areaStates`.
@@ -253,14 +437,237 @@ loadGameState().then(() => {
         // Tick each state and compute deltas for a concise summary
         // We pass 1 tick unit to processTick, representing one game loop iteration
         states.forEach(({ id, state }) => {
+            // areaMeta needs to be visible across the per-state tick processing
+            // (used by mission resolution later). Declare at this scope so
+            // downstream code can reference it safely.
+            let areaMeta = null;
+            if (id) {
+                // Find region/area meta
+                for (const r of world.regions) {
+                    const a = r.areas.find(x => x.id === id);
+                    if (a) { areaMeta = a; break; }
+                }
+            }
+
+            // Inject tech levels into state for gameLoop to use
+            if (areaMeta && areaMeta.ownerId && users[areaMeta.ownerId]) {
+                state.techLevels = users[areaMeta.ownerId].techLevels || {};
+            } else {
+                state.techLevels = {};
+            }
+
             const before = { resources: Object.assign({}, state.resources), population: state.population, queueLen: state.queue.length };
 
             // Determine area-level storage permissions (gold/ore) based on owner research
-            let ctx = { allowGold: true, allowOres: true };
+            let ctx = { allowGold: true, allowMinerals: true };
+            
+            // Define attack resolver for missions
+            ctx.resolveAttack = (mission) => {
+                const targetState = areaStates[mission.targetAreaId];
+                if (!targetState) {
+                    return { survivingUnits: mission.units, loot: {}, log: [{ round: 0, msg: 'Target not found' }] };
+                }
+
+                // Prepare attackers
+                const attackers = [];
+                Object.entries(mission.units).forEach(([type, count]) => {
+                    const cfg = UNIT_CONFIG[type];
+                    if (!cfg) return;
+                    for (let i = 0; i < count; i++) {
+                        attackers.push({ type, hp: cfg.hp, maxHp: cfg.hp, attack: cfg.attack, defense: cfg.defense });
+                    }
+                });
+
+                // Prepare defenders
+                const defenders = [];
+                Object.entries(targetState.units).forEach(([type, count]) => {
+                    const cfg = UNIT_CONFIG[type];
+                    if (!cfg) return;
+                    for (let i = 0; i < count; i++) {
+                        defenders.push({ type, hp: cfg.hp, maxHp: cfg.hp, attack: cfg.attack, defense: cfg.defense });
+                    }
+                });
+
+                const battleResult = resolveBattle(attackers, defenders);
+
+                // Capture original defender counts so we can compute destroyed units
+                const originalDefCounts = Object.assign({}, targetState.units || {});
+
+                // Update target state units
+                const survivingDefenders = {};
+                battleResult.defenders.forEach(u => {
+                    survivingDefenders[u.type] = (survivingDefenders[u.type] || 0) + 1;
+                });
+                // Reset all unit counts in target and then apply survivors
+                Object.values(UnitTypeEnum).forEach(u => {
+                    if (u === UnitTypeEnum.Villager) return; // Don't wipe villagers in combat for now
+                    targetState.units[u] = survivingDefenders[u] || 0;
+                });
+
+                // Calculate loot if attacker won
+                const loot = {};
+                if (battleResult.winner === 'attacker') {
+                    // Loot 20% of resources
+                    Object.entries(targetState.resources).forEach(([res, amount]) => {
+                        const taken = Math.floor(amount * 0.2);
+                        loot[res] = taken;
+                        targetState.resources[res] -= taken;
+                    });
+                }
+
+                // Compute battlefield salvage from destroyed units (both sides)
+                // Base salvage rate: 30% of unit cost
+                try {
+                    const destroyedCounts = {};
+                    // Defenders lost = original - surviving
+                    Object.keys(originalDefCounts).forEach(type => {
+                        const orig = originalDefCounts[type] || 0;
+                        const surv = survivingDefenders[type] || 0;
+                        const lost = Math.max(0, orig - surv);
+                        if (lost > 0) destroyedCounts[type] = (destroyedCounts[type] || 0) + lost;
+                    });
+                    // Attackers lost = sent - surviving
+                    Object.entries(mission.units || {}).forEach(([type, sent]) => {
+                        const surv = (battleResult.attackers || []).filter(u => u.type === type).length;
+                        const lost = Math.max(0, (sent || 0) - surv);
+                        if (lost > 0) destroyedCounts[type] = (destroyedCounts[type] || 0) + lost;
+                    });
+
+                    if (Object.keys(destroyedCounts).length > 0) {
+                        targetState.salvagePool = targetState.salvagePool || {};
+                        const SALVAGE_RATE = 0.30;
+                        Object.entries(destroyedCounts).forEach(([type, count]) => {
+                            const cfg = UNIT_CONFIG[type];
+                            if (!cfg || !cfg.cost) return;
+                            Object.entries(cfg.cost).forEach(([res, amt]) => {
+                                const add = Math.floor((amt || 0) * count * SALVAGE_RATE);
+                                if (!add) return;
+                                targetState.salvagePool[res] = (targetState.salvagePool[res] || 0) + add;
+                            });
+                        });
+                        // Mark that a battlefield wreck exists here so collectors can trigger refugee events
+                        // Use a special key to avoid colliding with resource keys
+                        targetState.salvagePool['__battle_wrecks'] = (targetState.salvagePool['__battle_wrecks'] || 0) + 1;
+                    }
+                } catch (err) {
+                    console.error('Error computing salvage for mission', err);
+                }
+
+                // Surviving attackers
+                const survivingAttackers = {};
+                battleResult.attackers.forEach(u => {
+                    survivingAttackers[u.type] = (survivingAttackers[u.type] || 0) + 1;
+                });
+
+                return {
+                    survivingUnits: survivingAttackers,
+                    loot,
+                    log: battleResult.log
+                };
+            };
+
+            ctx.resolveExpedition = (mission) => {
+                const duration = mission.durationHours || 1;
+                const provisionRatio = typeof mission.provisionRatio === 'number' ? mission.provisionRatio : 1.0;
+                const units = mission.units || {};
+                const villagerCount = units[UnitTypeEnum.Villager] || 0;
+                const militiaCount = units[UnitTypeEnum.Militia] || 0;
+
+                // --- 1. Calculate Weights ---
+                // Base Weights
+                let wCommon = 50;
+                let wIndustrial = 20;
+                let wElite = 10;
+                let wCache = 5;
+                let wAmbush = 10;
+                let wDisappear = 5;
+
+                // Duration Modifiers (Deeper = Better Rewards, Higher Risk)
+                // Shift from Common/Industrial to Elite/Cache/Disaster
+                const depthFactor = Math.max(0, duration - 1);
+                wCommon = Math.max(0, wCommon - (depthFactor * 1.5));
+                wIndustrial = Math.max(0, wIndustrial - (depthFactor * 0.5));
+                wElite += depthFactor * 0.8;
+                wCache += depthFactor * 0.4;
+                wAmbush += depthFactor * 0.5;
+                wDisappear += depthFactor * 0.3;
+
+                // Provisioning Risk (Exponential penalty for starvation)
+                if (provisionRatio < 1.0) {
+                    const starvationRisk = (1.0 - provisionRatio) * 2; // 0..2
+                    const penalty = Math.pow(5, starvationRisk); // 1..25 multiplier
+                    wAmbush *= penalty;
+                    wDisappear *= penalty;
+                }
+
+                // Unit Safety (Militia reduces risk)
+                // 1 Militia negates 1 point of Ambush weight, 0.5 Disappear
+                const safety = militiaCount * 1.0;
+                wAmbush = Math.max(1, wAmbush - safety);
+                wDisappear = Math.max(1, wDisappear - (safety * 0.5));
+
+                // Normalize Weights
+                const totalWeight = wCommon + wIndustrial + wElite + wCache + wAmbush + wDisappear;
+                const roll = Math.random() * totalWeight;
+
+                let loot = {};
+                let survivingUnits = { ...mission.units };
+                let log = [];
+                
+                // Scavenge Multiplier (Villagers)
+                const scavengeMult = 1 + (villagerCount * 0.05); // 5% bonus per villager
+
+                let current = 0;
+                if (roll < (current += wCommon)) {
+                    // Common Scavenge
+                    const res = [ResourceEnum.Timber, ResourceEnum.Stone, ResourceEnum.Food][Math.floor(Math.random() * 3)];
+                    const baseAmt = Math.floor(Math.random() * 200) + 50;
+                    const amount = Math.floor(baseAmt * scavengeMult);
+                    loot[res] = amount;
+                    log.push({ msg: `Common Scavenge: The villagers scavenged ${amount} ${res}.` });
+                } else if (roll < (current += wIndustrial)) {
+                    // Industrial Find
+                    const res = ResourceEnum.IronIngot;
+                    const baseAmt = Math.floor(Math.random() * 126) + 25;
+                    const amount = Math.floor(baseAmt * scavengeMult);
+                    loot[res] = amount;
+                    log.push({ msg: `Industrial Find: Discovered ${amount} ${res} in an abandoned workshop.` });
+                } else if (roll < (current += wElite)) {
+                    // Elite Discovery
+                    if (Math.random() > 0.5) {
+                        const amount = Math.floor(Math.random() * 5) + 1;
+                        loot[ResourceEnum.Horses] = amount;
+                        log.push({ msg: `Elite Discovery: Captured ${amount} Wild Horses!` });
+                    } else {
+                        const amount = Math.floor(Math.random() * 100) + 20;
+                        loot[ResourceEnum.Gold] = amount;
+                        log.push({ msg: `Elite Discovery: Found a small pouch containing ${amount} Gold.` });
+                    }
+                } else if (roll < (current += wCache)) {
+                    // The Lost Cache
+                    const amount = Math.floor(Math.random() * 500) + 200;
+                    loot[ResourceEnum.Knowledge] = amount;
+                    log.push({ msg: `The Lost Cache: Unearthed ancient scrolls worth ${amount} Knowledge Points!` });
+                } else if (roll < (current += wAmbush)) {
+                    // Ambush / Storm
+                    const lossRate = Math.random() * 0.3 + 0.2; // 20-50%
+                    Object.keys(survivingUnits).forEach(type => {
+                        survivingUnits[type] = Math.floor(survivingUnits[type] * (1 - lossRate));
+                    });
+                    log.push({ msg: `Ambush / Storm: The party was hit by a disaster! Lost ${Math.round(lossRate * 100)}% of the units.` });
+                } else {
+                    // Total Disappearance
+                    survivingUnits = {};
+                    log.push({ msg: "Total Disappearance: The expedition never returned. All units and resources lost." });
+                }
+
+                return { survivingUnits, loot, log };
+            };
+
             try {
                 if (id) {
                     // find area metadata to obtain ownerId
-                    let areaMeta = null;
+                    areaMeta = null;
                     for (const r of world.regions) {
                         const a = r.areas.find(x => x.id === id);
                         if (a) { areaMeta = a; break; }
@@ -269,7 +676,8 @@ loadGameState().then(() => {
                     if (ownerId && users[ownerId]) {
                         const researched = users[ownerId].researchedTechs || [];
                         ctx.allowGold = researched.includes('Gold Storage');
-                        ctx.allowOres = researched.includes('Ore Storage');
+                        ctx.allowMinerals = researched.includes('Mineral Storage');
+                        ctx.hasDeepProspecting = researched.includes('Deep Prospecting');
                     }
                 }
             } catch (e) { /* ignore permission calc errors */ }
@@ -277,6 +685,101 @@ loadGameState().then(() => {
             // Pass 1 tick unit. Logic inside processTick handles scaling if needed, 
             // but generally 1 tick = 1 unit of production/consumption time.
             processTick(state, 1, ctx);
+
+            // Process missions attached to this area state: decrement travel timers
+            try {
+                if (Array.isArray(state.missions) && state.missions.length > 0) {
+                    for (let mi = state.missions.length - 1; mi >= 0; mi--) {
+                        const m = state.missions[mi];
+                        if (typeof m.ticksRemaining === 'undefined') m.ticksRemaining = m.totalTicks || 0;
+                        m.ticksRemaining = Math.max(0, (m.ticksRemaining || 0) - 1);
+
+                        if (m.ticksRemaining <= 0) {
+                            // Mission has arrived/finished — resolve based on type
+                            try {
+                                const ownerId = areaMeta ? areaMeta.ownerId : null;
+                                if (m.type === 'Expedition' && ctx && typeof ctx.resolveExpedition === 'function') {
+                                    const result = ctx.resolveExpedition(m);
+                                    // Return surviving units to origin area
+                                    Object.entries(result.survivingUnits || {}).forEach(([ut, cnt]) => {
+                                        state.units[ut] = (state.units[ut] || 0) + (cnt || 0);
+                                    });
+                                    // Apply loot to origin area's resources
+                                    Object.entries(result.loot || {}).forEach(([resKey, amt]) => {
+                                        state.resources[resKey] = (state.resources[resKey] || 0) + (amt || 0);
+                                    });
+
+                                    const report = {
+                                        id: crypto.randomUUID(),
+                                        type: 'expedition_report',
+                                        missionId: m.id,
+                                        originAreaId: m.originAreaId,
+                                        targetAreaId: m.targetAreaId,
+                                        ownerId: ownerId,
+                                        createdAt: Date.now(),
+                                        unitsSent: m.units,
+                                        unitsReturned: result.survivingUnits,
+                                        loot: result.loot,
+                                        log: result.log || []
+                                    };
+
+                                    // Persist as a user notification so the player can view the report
+                                    if (ownerId && users[ownerId]) {
+                                        users[ownerId].notifications = users[ownerId].notifications || [];
+                                        const notif = {
+                                            id: crypto.randomUUID(),
+                                            type: 'expedition_report',
+                                            reportId: report.id,
+                                            text: `Expedition returned from ${m.targetAreaId}`,
+                                            createdAt: Date.now(),
+                                            read: false,
+                                            payload: report
+                                        };
+                                        users[ownerId].notifications.push(notif);
+                                    }
+
+                                    console.log(`Mission ${m.id} (Expedition) completed for area ${m.originAreaId}`);
+                                } else if (m.type === 'Attack' && ctx && typeof ctx.resolveAttack === 'function') {
+                                    const result = ctx.resolveAttack(m);
+                                    // Return surviving attackers to origin
+                                    Object.entries(result.survivingUnits || {}).forEach(([ut, cnt]) => {
+                                        state.units[ut] = (state.units[ut] || 0) + (cnt || 0);
+                                    });
+                                    // Apply loot
+                                    Object.entries(result.loot || {}).forEach(([resKey, amt]) => {
+                                        state.resources[resKey] = (state.resources[resKey] || 0) + (amt || 0);
+                                    });
+
+                                    const report = {
+                                        id: crypto.randomUUID(),
+                                        type: 'attack_report',
+                                        missionId: m.id,
+                                        originAreaId: m.originAreaId,
+                                        targetAreaId: m.targetAreaId,
+                                        ownerId: areaMeta ? areaMeta.ownerId : null,
+                                        createdAt: Date.now(),
+                                        unitsSent: m.units,
+                                        unitsReturned: result.survivingUnits,
+                                        loot: result.loot,
+                                        log: result.log || []
+                                    };
+                                    if (areaMeta && areaMeta.ownerId && users[areaMeta.ownerId]) {
+                                        users[areaMeta.ownerId].notifications = users[areaMeta.ownerId].notifications || [];
+                                        users[areaMeta.ownerId].notifications.push({ id: crypto.randomUUID(), type: 'attack_report', reportId: report.id, text: `Attack on ${m.targetAreaId} completed`, createdAt: Date.now(), read: false, payload: report });
+                                    }
+
+                                    console.log(`Mission ${m.id} (Attack) completed for area ${m.originAreaId}`);
+                                }
+                            } catch (err) {
+                                console.error('Error resolving mission', err);
+                            }
+
+                            // Remove mission from the list
+                            state.missions.splice(mi, 1);
+                        }
+                    }
+                }
+            } catch (err) { console.error('Mission tick processing error', err); }
 
             const after = { resources: Object.assign({}, state.resources), population: state.population, queueLen: state.queue.length };
 
@@ -292,26 +795,56 @@ loadGameState().then(() => {
             summaries.push({ name: state.name || 'Demo', popDelta, completed, activeTasks });
         });
 
+        // Process proximity alerts for all areas
+        processProximityAlerts(areaStates);
+
         // Process user research completion and count how many finished this tick
         let researchCompleted = 0;
         Object.values(users).forEach(user => {
             if (user.activeResearch) {
-                // Decrement ticks remaining
-                if (typeof user.activeResearch.ticksRemaining === 'undefined') {
-                    // Migration for existing research: assume 1 tick left if not set
-                    user.activeResearch.ticksRemaining = 1;
-                }
-                user.activeResearch.ticksRemaining -= 1;
+                    // Decrement ticks remaining with possible speed modifiers
+                    if (typeof user.activeResearch.ticksRemaining === 'undefined') {
+                        // Migration for existing research: assume 1 tick left if not set
+                        user.activeResearch.ticksRemaining = 1;
+                    }
+                    // Base speed
+                    let speed = (WORLD_CONFIG && WORLD_CONFIG.researchSpeed) || 1;
+                    try {
+                        // If researching Medical Alchemy and the user has any Library with Scholars present, double speed
+                        if ((user.activeResearch.techId || '') === 'Medical Alchemy') {
+                            let scholarFound = false;
+                            for (const r of world.regions) {
+                                for (const a of r.areas) {
+                                    if (a && a.id && a.ownerId === user.id) {
+                                        const st = areaStates[a.id];
+                                        if (st && st.units && (st.units[UnitTypeEnum.Scholar] || 0) > 0 && (st.buildings['Library'] || 0) > 0) {
+                                            scholarFound = true; break;
+                                        }
+                                    }
+                                }
+                                if (scholarFound) break;
+                            }
+                            if (scholarFound) speed *= 2;
+                        }
+                    } catch (e) { /* ignore */ }
 
-                if (user.activeResearch.ticksRemaining <= 0) {
-                    const tech = user.activeResearch.techId;
-                    user.researchedTechs = user.researchedTechs || [];
-                    if (!user.researchedTechs.includes(tech)) user.researchedTechs.push(tech);
-                    user.activeResearch = null;
-                    researchCompleted++;
-                    console.log(`Research complete for user ${user.username}: ${tech}`);
+                    user.activeResearch.ticksRemaining -= speed;
+
+                    if (user.activeResearch.ticksRemaining <= 0) {
+                        const tech = user.activeResearch.techId;
+                        const nextLevel = user.activeResearch.level || 1;
+                    
+                        user.techLevels = user.techLevels || {};
+                        user.techLevels[tech] = nextLevel;
+                    
+                        // Keep researchedTechs array in sync for legacy code
+                        user.researchedTechs = Object.keys(user.techLevels);
+                    
+                        user.activeResearch = null;
+                        researchCompleted++;
+                        console.log(`Research complete for user ${user.username}: ${tech} (Level ${nextLevel})`);
+                    }
                 }
-            }
         });
 
         // Emit summary
@@ -388,12 +921,14 @@ app.post('/api/register', async (req, res) => {
     Object.values(UnitTypeEnum).forEach(u => inventory.units[u] = 0);
     // Give one TradeCart containing the starting goods
     inventory.units[UnitTypeEnum.TradeCart] = 1;
+    // Starter cart: resources players receive on claim
     inventory.cartContents = {
-        [ResourceEnum.Timber]: 200,
-        [ResourceEnum.Stone]: 50,
-        [ResourceEnum.Food]: 300,
-        [ResourceEnum.Planks]: 20
+        [ResourceEnum.Food]: 1000,
+        [ResourceEnum.Timber]: 500,
+        [ResourceEnum.Stone]: 200
     };
+    // Provide starter villagers in the player's inventory so they can be transferred on claim
+    inventory.units[UnitTypeEnum.Villager] = 10;
 
     const hash = await bcrypt.hash(password, 10);
     users[id] = { id, username, password: hash, inventory, researchedTechs: [], activeResearch: null, messages: [] };
@@ -434,17 +969,24 @@ app.post('/api/create-test-account', async (req, res) => {
     } while (Object.values(users).some(u => u.username === username));
     const password = Math.random().toString(36).slice(2,10);
     const id = crypto.randomUUID();
-    // Initialize inventory as with regular registration
+    // Initialize inventory as with regular registration, but seed with generous demo resources
     const inventory = { resources: {}, units: {}, cartContents: {} };
+    // Seed base resources so test accounts can immediately start common research
     Object.values(ResourceEnum).forEach(r => inventory.resources[r] = 0);
     Object.values(UnitTypeEnum).forEach(u => inventory.units[u] = 0);
     inventory.units[UnitTypeEnum.TradeCart] = 1;
+    // Give larger starter stock to avoid "Insufficient" errors for research/start
     inventory.cartContents = {
-        [ResourceEnum.Timber]: 200,
-        [ResourceEnum.Stone]: 50,
-        [ResourceEnum.Food]: 300,
-        [ResourceEnum.Planks]: 20
+        [ResourceEnum.Food]: 5000,
+        [ResourceEnum.Timber]: 2000,
+        [ResourceEnum.Stone]: 2000,
+        [ResourceEnum.Gold]: 500
     };
+    // Also seed a small amount directly into inventory.resources for convenience
+    inventory.resources[ResourceEnum.Timber] = 500;
+    inventory.resources[ResourceEnum.Stone] = 300;
+    // Give demo villagers equal to starting population for consistency
+    inventory.units[UnitTypeEnum.Villager] = 30;
 
     const hash = await bcrypt.hash(password, 10);
     users[id] = { id, username, password: hash, inventory, researchedTechs: [], activeResearch: null, messages: [] };
@@ -467,8 +1009,199 @@ app.post('/api/messages/send', async (req, res) => {
     const msg = { id: crypto.randomUUID(), from: fromId, to: toUserId, subject: subject || '', body: body || '', createdAt: Date.now(), read: false };
     users[toUserId].messages = users[toUserId].messages || [];
     users[toUserId].messages.push(msg);
+
+    // create corresponding notification for recipient
+    users[toUserId].notifications = users[toUserId].notifications || [];
+    const notif = { id: crypto.randomUUID(), type: 'message', messageId: msg.id, from: fromId, text: subject || (body || '').slice(0,80), createdAt: Date.now(), read: false };
+    users[toUserId].notifications.push(notif);
+
     try { await saveGameState(); } catch (e) { /* ignore save errors */ }
     return res.json({ success: true, messageId: msg.id });
+});
+
+// Get unread notification count
+app.get('/api/notifications/count', (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    user.notifications = user.notifications || [];
+    const count = user.notifications.filter(n => !n.read).length;
+    return res.json({ count });
+});
+
+// Get notifications list
+app.get('/api/notifications', (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    user.notifications = user.notifications || [];
+    const out = user.notifications.slice().sort((a,b) => b.createdAt - a.createdAt);
+    return res.json({ notifications: out });
+});
+
+app.get('/api/espionage/reports', (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const reports = [];
+    for (const [areaId, state] of Object.entries(areaStates)) {
+        // Check ownership
+        let areaMeta = null;
+        for (const r of world.regions) {
+            const a = r.areas.find(x => x.id === areaId);
+            if (a) { areaMeta = a; break; }
+        }
+        
+        if (areaMeta && areaMeta.ownerId === userId) {
+            if (state.proximityAlerts) {
+                state.proximityAlerts.forEach(a => {
+                    reports.push({
+                        ...a,
+                        areaId,
+                        type: 'proximity'
+                    });
+                });
+            }
+        }
+    }
+
+    // Also include spy reports from notifications
+    if (notifications[userId]) {
+        notifications[userId].forEach(n => {
+            if (n.payload && n.payload.type === 'spy_report') {
+                reports.push({
+                    id: n.id,
+                    type: 'spy_report',
+                    targetAreaId: n.payload.targetAreaId,
+                    depth: n.payload.depth,
+                    success: n.payload.success,
+                    timestamp: n.createdAt
+                });
+            }
+        });
+    }
+    
+    // Sort by timestamp
+    reports.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    res.json({ reports });
+});
+
+app.get('/api/espionage/intel/:targetAreaId', (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const targetAreaId = req.params.targetAreaId;
+    const targetState = areaStates[targetAreaId];
+    if (!targetState) return res.status(404).json({ error: 'Target area not found' });
+
+    // Find user's best Shadow Guild level
+    let maxSpyLevel = 0;
+    for (const [areaId, state] of Object.entries(areaStates)) {
+        let areaMeta = null;
+        for (const r of world.regions) {
+            const a = r.areas.find(x => x.id === areaId);
+            if (a) { areaMeta = a; break; }
+        }
+        if (areaMeta && areaMeta.ownerId === userId) {
+            const guildLevel = state.buildings['ShadowGuild'] || 0;
+            const assignedSpies = state.assignments['ShadowGuild'] || 0;
+            const effective = calculateEffectiveSpyLevel(guildLevel, assignedSpies);
+            if (effective > maxSpyLevel) maxSpyLevel = effective;
+        }
+    }
+
+    // Target's counter-spy level
+    const targetGuildLevel = targetState.buildings['ShadowGuild'] || 0;
+    const targetAssignedSpies = targetState.assignments['ShadowGuild'] || 0;
+    const targetSpyLevel = calculateEffectiveSpyLevel(targetGuildLevel, targetAssignedSpies);
+
+    const depth = calculateIntelDepth(maxSpyLevel, targetSpyLevel);
+
+    if (depth === 'FAILED') {
+        return res.json({ depth, message: 'Infiltration Failed. Spy is captured/killed.' });
+    }
+
+    const intel = { depth };
+    
+    // BASIC: Resources only
+    if (depth === 'BASIC' || depth === 'STANDARD' || depth === 'FULL') {
+        intel.resources = targetState.resources;
+    }
+
+    // STANDARD: + Building Levels
+    if (depth === 'STANDARD' || depth === 'FULL') {
+        intel.buildings = targetState.buildings;
+    }
+
+    // FULL: + Exact Unit counts
+    if (depth === 'FULL') {
+        intel.units = targetState.units;
+    }
+
+    res.json(intel);
+});
+
+app.post('/api/espionage/spy', (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { targetAreaId, originAreaId } = req.body;
+
+    const state = areaStates[originAreaId];
+    if (!state || state.ownerId !== userId) return res.status(403).json({ error: 'Invalid origin' });
+
+    const guildLevel = (state.buildings && state.buildings['ShadowGuild']) || 0;
+    if (guildLevel <= 0) return res.status(400).json({ error: 'Shadow Guild required' });
+
+    // Simulate a spy mission
+    const targetState = areaStates[targetAreaId] || gameState;
+    const targetGuildLevel = (targetState.buildings && targetState.buildings['ShadowGuild']) || 0;
+    const targetAssignedSpies = targetState.assignments['ShadowGuild'] || 0;
+    const targetSpyLevel = calculateEffectiveSpyLevel(targetGuildLevel, targetAssignedSpies);
+    
+    const assignedSpies = state.assignments['ShadowGuild'] || 0;
+    const effectiveSpyLevel = calculateEffectiveSpyLevel(guildLevel, assignedSpies);
+    
+    const depth = calculateIntelDepth(effectiveSpyLevel, targetSpyLevel);
+
+    // Create a notification for the player
+    const reportId = 'spy_' + Date.now();
+    const report = {
+        id: reportId,
+        userId,
+        text: `Spy Report: ${targetAreaId}`,
+        createdAt: new Date().toISOString(),
+        read: false,
+        payload: {
+            type: 'spy_report',
+            targetAreaId,
+            depth,
+            success: depth !== 'FAILED'
+        }
+    };
+
+    if (!notifications[userId]) notifications[userId] = [];
+    notifications[userId].push(report);
+
+    res.json({ success: true, depth, message: depth === 'FAILED' ? 'Spy was caught!' : 'Spy successfully infiltrated.' });
+});
+
+// Mark notification read
+app.post('/api/notifications/mark-read', async (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { notificationId } = req.body || {};
+    if (!notificationId) return res.status(400).json({ error: 'Missing notificationId' });
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    user.notifications = user.notifications || [];
+    const n = user.notifications.find(x => x.id === notificationId);
+    if (!n) return res.status(404).json({ error: 'Notification not found' });
+    n.read = true;
+    try { await saveGameState(); } catch (e) { }
+    return res.json({ success: true });
 });
 
 // Get inbox for authenticated user
@@ -589,7 +1322,16 @@ app.get('/admin', (req, res) => {
                         </div>
                         <div id="actions" style="display:none;margin-top:12px">
                             <div style="margin-bottom:8px"><button id="completeBtn">Complete All Buildings</button></div>
-                            <div style="margin-bottom:8px">Grant resources: <input id="gUser" placeholder="userId (optional)"/> <input id="gArea" placeholder="areaId (optional)"/> <input id="gKey" value="Food"/> <input id="gAmt" type="number" value="100"/> <button id="grantBtn">Grant</button></div>
+                            <div style="margin-bottom:8px">Grant resources / units:
+                                <input id="gUser" placeholder="userId (optional)"/>
+                                <input id="gArea" placeholder="areaId (optional)"/>
+                                <input id="gKey" value="Food" style="width:80px"/>
+                                <input id="gAmt" type="number" value="100" style="width:80px"/>
+                                <span style="margin-left:8px">OR Units:</span>
+                                <input id="gUnitType" placeholder="Villager" style="width:110px"/>
+                                <input id="gUnitCount" type="number" value="0" style="width:80px"/>
+                                <button id="grantBtn">Grant</button>
+                            </div>
                             <div style="margin-bottom:8px"><button id="cfgBtn">View Server Config</button></div>
                             <pre id="out" style="background:#fafafa;padding:8px;max-height:300px;overflow:auto"></pre>
                         </div>
@@ -622,7 +1364,14 @@ app.get('/admin', (req, res) => {
                             const areaId = document.getElementById('gArea').value || undefined;
                             const key = document.getElementById('gKey').value || 'Food';
                             const amt = Number(document.getElementById('gAmt').value || 0);
-                            const body = { resources: { [key]: amt } };
+                            const unitType = document.getElementById('gUnitType').value || '';
+                            const unitCount = Number(document.getElementById('gUnitCount').value || 0);
+                            const body = {};
+                            if (unitType && unitCount > 0) {
+                                body.units = { [unitType]: unitCount };
+                            } else {
+                                body.resources = { [key]: amt };
+                            }
                             if (userId) body.userId = userId; if (areaId) body.areaId = areaId;
                             const r = await fetch('/api/admin/grant', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify(body) });
                             const j = await r.json(); document.getElementById('out').textContent = JSON.stringify(j, null, 2);
@@ -652,7 +1401,20 @@ app.post('/api/admin/complete-buildings', async (req, res) => {
                 state.buildings[item.id] = (state.buildings[item.id] || 0) + 1;
                 completed++;
             } else if (item.type === 'Unit') {
-                state.units[item.id] = (state.units[item.id] || 0) + (item.count || 0);
+                // If creating Scholars, convert villagers into scholars
+                try {
+                    if (item.id === UnitTypeEnum.Scholar) {
+                        const qty = (item.count || 0);
+                        state.units[UnitTypeEnum.Scholar] = (state.units[UnitTypeEnum.Scholar] || 0) + qty;
+                        const villagers = state.units[UnitTypeEnum.Villager] || 0;
+                        const toConvert = Math.min(villagers, qty);
+                        state.units[UnitTypeEnum.Villager] = Math.max(0, villagers - toConvert);
+                    } else {
+                        state.units[item.id] = (state.units[item.id] || 0) + (item.count || 0);
+                    }
+                } catch (e) {
+                    state.units[item.id] = (state.units[item.id] || 0) + (item.count || 0);
+                }
                 completed++;
             }
         }
@@ -685,14 +1447,27 @@ app.post('/api/admin/grant', async (req, res) => {
     const { userId, areaId, resources } = req.body || {};
     if (!resources || typeof resources !== 'object') return res.status(400).json({ error: 'Missing resources object' });
 
+    // Support granting resources and units. `resources` and/or `units` may be provided.
+    const { units } = req.body || {};
+
     if (userId) {
         const user = users[userId];
         if (!user) return res.status(404).json({ error: 'User not found' });
         user.inventory = user.inventory || { resources: {}, units: {}, cartContents: {} };
-        user.inventory.resources = user.inventory.resources || {};
-        Object.entries(resources).forEach(([k,v]) => {
-            user.inventory.resources[k] = (user.inventory.resources[k] || 0) + (Number(v) || 0);
-        });
+        // Grant resources if provided
+        if (resources && typeof resources === 'object') {
+            user.inventory.resources = user.inventory.resources || {};
+            Object.entries(resources).forEach(([k,v]) => {
+                user.inventory.resources[k] = (user.inventory.resources[k] || 0) + (Number(v) || 0);
+            });
+        }
+        // Grant units if provided
+        if (units && typeof units === 'object') {
+            user.inventory.units = user.inventory.units || {};
+            Object.entries(units).forEach(([k,v]) => {
+                user.inventory.units[k] = (user.inventory.units[k] || 0) + (Number(v) || 0);
+            });
+        }
         try { await saveGameState(); } catch (e) { /* ignore */ }
         return res.json({ success: true, userId, inventory: user.inventory });
     }
@@ -700,12 +1475,28 @@ app.post('/api/admin/grant', async (req, res) => {
     if (areaId) {
         const state = areaStates[areaId];
         if (!state) return res.status(404).json({ error: 'Area state not found' });
-        state.resources = state.resources || {};
-        Object.entries(resources).forEach(([k,v]) => {
-            state.resources[k] = (state.resources[k] || 0) + (Number(v) || 0);
-        });
+        // Grant resources to area
+        if (resources && typeof resources === 'object') {
+            state.resources = state.resources || {};
+            Object.entries(resources).forEach(([k,v]) => {
+                state.resources[k] = (state.resources[k] || 0) + (Number(v) || 0);
+            });
+        }
+        // Grant units to area: for Villager, increment population and units count
+        if (units && typeof units === 'object') {
+            state.units = state.units || {};
+            Object.entries(units).forEach(([k,v]) => {
+                const n = Number(v) || 0;
+                state.units[k] = (state.units[k] || 0) + n;
+                // If granting villagers, also increment population and available units
+                if (k === UnitTypeEnum.Villager || k === 'Villager') {
+                    state.population = (state.population || 0) + n;
+                    state.units[UnitTypeEnum.Villager] = (state.units[UnitTypeEnum.Villager] || 0) + n;
+                }
+            });
+        }
         try { await saveGameState(); } catch (e) { /* ignore */ }
-        return res.json({ success: true, areaId, resources: state.resources });
+        return res.json({ success: true, areaId, resources: state.resources, units: state.units, population: state.population });
     }
 
     return res.status(400).json({ error: 'Must specify userId or areaId' });
@@ -717,74 +1508,171 @@ app.get('/api/admin/config', (req, res) => {
     return res.json({ GAME_CONFIG });
 });
 
-// Simple research metadata (demo)
-const RESEARCH_DEFS = {
-    // Make Basic Tools affordable early-game so players can research it without large reserves
-    'Basic Tools': { id: 'Basic Tools', description: 'Unlocks basic production improvements.', cost: { [ResourceEnum.Stone]: 30, [ResourceEnum.Timber]: 50 }, durationSeconds: 20, requiredTownLevel: 1 },
-    'Smelting': { id: 'Smelting', description: 'Allows smelting of ores.', cost: { [ResourceEnum.Gold]: 50, [ResourceEnum.Timber]: 30 }, durationSeconds: 45 },
-    'The Wheel': { id: 'The Wheel', description: 'Enables wagons and trade', cost: { [ResourceEnum.Gold]: 40, [ResourceEnum.Timber]: 60 }, durationSeconds: 40 },
-    'Agriculture': { id: 'Agriculture', description: 'Enables transition from foraging to organized farming (unlocks Farmhouse).', cost: { [ResourceEnum.Gold]: 30, [ResourceEnum.Timber]: 60 }, durationSeconds: 60 },
-    'Advanced Studies': { id: 'Advanced Studies', description: 'Unlocks higher tier techs.', cost: { [ResourceEnum.Gold]: 120 }, durationSeconds: 90 }
-    , 'Gold Storage': { id: 'Gold Storage', description: 'Allows storage of Gold in your Storehouse.', cost: { [ResourceEnum.Gold]: 0, [ResourceEnum.Timber]: 50 }, durationSeconds: 60 },
-    'Ore Storage': { id: 'Ore Storage', description: 'Allows storage of raw ores (IronOre/Coal) in your Storehouse.', cost: { [ResourceEnum.Gold]: 0, [ResourceEnum.Timber]: 60 }, durationSeconds: 75 }
-};
+// Debug: list all runtime missions across areaStates (admin only)
+app.get('/api/debug/missions', (req, res) => {
+    if (!checkAdmin(req, res)) return;
+    try {
+        const now = Date.now();
+        const out = [];
 
-// New: Timber -> Planks research. Requires Basic Tools and a TownHall level 2 settlement.
-RESEARCH_DEFS['Timber Planks'] = {
-    id: 'Timber Planks',
-    description: 'Enables villagers to convert Timber into Planks at Logging Camps (4 Timber -> 1 Plank). Requires Basic Tools and TownHall level 2.',
-    cost: { [ResourceEnum.Timber]: 200, [ResourceEnum.Gold]: 10 },
-    durationSeconds: 40,
-    requiredTownLevel: 2,
-    requiredTechs: ['Basic Tools']
-};
+        // Include missions stored on the demo gameState
+        if (gameState && Array.isArray(gameState.missions)) {
+            gameState.missions.forEach(m => {
+                out.push({
+                    originAreaId: m.originAreaId || null,
+                    targetAreaId: m.targetAreaId || null,
+                    id: m.id,
+                    type: m.type,
+                    status: m.status,
+                    units: m.units,
+                    ticksRemaining: m.ticksRemaining,
+                    totalTicks: m.totalTicks,
+                    expectedReturnAt: (typeof m.ticksRemaining === 'number') ? (now + (m.ticksRemaining * 1000)) : null,
+                    raw: m
+                });
+            });
+        }
 
+        // Include missions from all persisted/loaded areaStates
+        Object.entries(areaStates).forEach(([areaId, state]) => {
+            if (!state || !Array.isArray(state.missions)) return;
+            state.missions.forEach(m => {
+                out.push({
+                    originAreaId: m.originAreaId || areaId,
+                    originStateId: areaId,
+                    targetAreaId: m.targetAreaId || null,
+                    id: m.id,
+                    type: m.type,
+                    status: m.status,
+                    units: m.units,
+                    ticksRemaining: m.ticksRemaining,
+                    totalTicks: m.totalTicks,
+                    expectedReturnAt: (typeof m.ticksRemaining === 'number') ? (now + (m.ticksRemaining * 1000)) : null,
+                    raw: m
+                });
+            });
+        });
+
+        // Sort by expected return soonest first
+        out.sort((a, b) => {
+            const ta = a.expectedReturnAt || 0;
+            const tb = b.expectedReturnAt || 0;
+            return ta - tb;
+        });
+
+        return res.json({ count: out.length, missions: out });
+    } catch (err) {
+        console.error('Error building debug missions list:', err);
+        return res.status(500).json({ error: 'Failed to collect missions' });
+    }
+});
 // Research endpoints
 app.get('/api/research', (req, res) => {
     const userId = authFromReq(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const user = users[userId];
     if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Ensure techLevels exists
+    user.techLevels = user.techLevels || {};
+    // Migration: if researchedTechs exists but techLevels is empty, populate it
+    if (Array.isArray(user.researchedTechs) && Object.keys(user.techLevels).length === 0) {
+        user.researchedTechs.forEach(tid => { user.techLevels[tid] = 1; });
+    }
+
     // Clone defs to avoid accidental mutation
     const defs = JSON.parse(JSON.stringify(RESEARCH_DEFS || {}));
-
+    // Debug: log top-level categories for research defs
+    try {
+        console.log('DEBUG: /api/research defs categories=', Object.keys(defs));
+    } catch (e) { /* ignore */ }
+    
     // Compute locked state per tech for this user. A tech is locked if it
     // requires a TownHall level the user does not have on any owned area.
     const userTownLevels = [];
+    const userBuildingLevels = {}; // buildingId -> maxLevel
+
     for (const r of world.regions) {
         for (const a of r.areas) {
             if (a.ownerId === userId) {
                 const st = areaStates[a.id];
-                const lvl = st ? (st.buildings && st.buildings['TownHall'] ? st.buildings['TownHall'] : 0) : 0;
-                userTownLevels.push(lvl);
+                if (st && st.buildings) {
+                    Object.entries(st.buildings).forEach(([bid, blvl]) => {
+                        userBuildingLevels[bid] = Math.max(userBuildingLevels[bid] || 0, blvl);
+                    });
+                    const lvl = st.buildings['TownHall'] || 0;
+                    userTownLevels.push(lvl);
+                }
             }
         }
     }
     const maxTownLevel = userTownLevels.length > 0 ? Math.max(...userTownLevels) : 0;
 
     const available = [];
-    const userResearched = (users[userId] && users[userId].researchedTechs) || [];
-    Object.keys(defs).forEach(tid => {
-        const def = defs[tid];
-        // Special-case: make Basic Tools available to all players by default
-        if (tid === 'Basic Tools') {
-            def.locked = false;
-            available.push(tid);
-            return;
-        }
-        let locked = false;
-        const reqLvl = def.requiredTownLevel || 0;
-        if (reqLvl > 0 && maxTownLevel < reqLvl) locked = true;
-        // If research has tech prereqs, lock unless user has researched them
-        if (!locked && Array.isArray(def.requiredTechs) && def.requiredTechs.length > 0) {
-            const missing = def.requiredTechs.filter(t => !userResearched.includes(t));
-            if (missing.length > 0) locked = true;
-        }
-        def.locked = locked;
-        if (!locked) available.push(tid);
+    const userResearched = Object.keys(user.techLevels);
+
+    // defs is grouped by building (TownHall, Storehouse, ...). Iterate each category
+    // and then each tech id inside the category so we calculate costs using the
+    // actual tech id (e.g. 'Basic Tools') instead of the category key (e.g. 'TownHall').
+    Object.keys(defs).forEach(categoryKey => {
+        const category = defs[categoryKey] || {};
+        try { console.log('DEBUG: research category=', categoryKey, 'keys=', Object.keys(category)); } catch (e) {}
+        Object.keys(category).forEach(tid => {
+            try { if (typeof tid !== 'string') console.log('DEBUG: non-string tid', tid); else if (tid === categoryKey) console.log('DEBUG: tid equals categoryKey', tid); } catch (e) {}
+            const def = category[tid];
+            const currentLevel = user.techLevels[tid] || 0;
+
+            // Calculate dynamic cost and duration
+            def.level = currentLevel;
+            def.cost = calculateResearchCost(tid, currentLevel);
+            def.durationSeconds = calculateResearchTime(tid, currentLevel, def.cost);
+
+            // Apply world research speed
+            try {
+                const speed = (WORLD_CONFIG && WORLD_CONFIG.researchSpeed) || 1;
+                if (speed && speed !== 1) {
+                    def.durationSeconds = Math.max(1, Math.ceil(def.durationSeconds / speed));
+                }
+            } catch (e) { /* ignore */ }
+
+            
+
+            let locked = false;
+
+            // Check building requirements
+            const req = def.requirement;
+            if (req && req.building) {
+                const hasLvl = userBuildingLevels[req.building] || 0;
+                if (hasLvl < req.level) locked = true;
+            }
+
+            // Legacy TownHall requirement check
+            const reqLvl = def.requiredTownLevel || 0;
+            if (reqLvl > 0 && maxTownLevel < reqLvl) locked = true;
+
+            // If research has tech prereqs, lock unless user has researched them
+            if (!locked && Array.isArray(def.requiredTechs) && def.requiredTechs.length > 0) {
+                const missing = def.requiredTechs.filter(t => !userResearched.includes(t));
+                if (missing.length > 0) locked = true;
+            }
+
+            // If it's a One-Off and already researched, it's not "available" to start again
+            if (def.type === 'One-Off' && currentLevel > 0) {
+                locked = true;
+            }
+
+            def.locked = locked;
+            if (!locked) available.push(tid);
+        });
     });
 
-    return res.json({ researched: user.researchedTechs || [], active: user.activeResearch || null, available, defs });
+    return res.json({ 
+        researched: userResearched, 
+        techLevels: user.techLevels,
+        active: user.activeResearch || null, 
+        available, 
+        defs 
+    });
 });
 
 app.post('/api/research/start', async (req, res) => {
@@ -793,16 +1681,48 @@ app.post('/api/research/start', async (req, res) => {
     // Accept either { techId } or { id } from the client
     const body = req.body || {};
     const techId = body.techId || body.id || null;
-    if (!techId || !RESEARCH_DEFS[techId]) return res.status(400).json({ error: 'Invalid or missing tech id' });
+    if (!techId || !ALL_RESEARCH[techId]) return res.status(400).json({ error: 'Invalid or missing tech id' });
     const user = users[userId];
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (!user.researchedTechs) user.researchedTechs = [];
-    if (user.researchedTechs && user.researchedTechs.includes(techId)) return res.status(400).json({ error: 'Already researched' });
+
+    user.techLevels = user.techLevels || {};
+    const currentLevel = user.techLevels[techId] || 0;
+    const def = ALL_RESEARCH[techId];
+
+    if (def.type === 'One-Off' && currentLevel > 0) return res.status(400).json({ error: 'Already researched' });
     if (user.activeResearch) return res.status(400).json({ error: 'Another research is active' });
 
-    const def = RESEARCH_DEFS[techId];
-    // Enforce any area ownership / TownHall requirements (skip for Basic Tools)
-    if (def.requiredTownLevel && techId !== 'Basic Tools') {
+    // Calculate dynamic cost and duration
+    const cost = calculateResearchCost(techId, currentLevel);
+    let durationSeconds = calculateResearchTime(techId, currentLevel, cost);
+
+    // Apply world research speed
+    try {
+        const speed = (WORLD_CONFIG && WORLD_CONFIG.researchSpeed) || 1;
+        if (speed && speed !== 1) {
+            durationSeconds = Math.max(1, Math.ceil(durationSeconds / speed));
+        }
+    } catch (e) { /* ignore */ }
+
+    // Enforce building requirements
+    const reqBuilding = def.requirement;
+    if (reqBuilding && reqBuilding.building) {
+        let hasReq = false;
+        for (const r of world.regions) {
+            for (const a of r.areas) {
+                if (a.ownerId === userId) {
+                    const st = areaStates[a.id];
+                    const lvl = st ? (st.buildings && st.buildings[reqBuilding.building] ? st.buildings[reqBuilding.building] : 0) : 0;
+                    if (lvl >= reqBuilding.level) { hasReq = true; break; }
+                }
+            }
+            if (hasReq) break;
+        }
+        if (!hasReq) return res.status(400).json({ error: `Requires ${reqBuilding.building} level ${reqBuilding.level}` });
+    }
+
+    // Legacy TownHall requirement check
+    if (def.requiredTownLevel) {
         let hasReq = false;
         for (const r of world.regions) {
             for (const a of r.areas) {
@@ -816,12 +1736,14 @@ app.post('/api/research/start', async (req, res) => {
         }
         if (!hasReq) return res.status(400).json({ error: `Requires TownHall level ${def.requiredTownLevel}` });
     }
-    // Ensure tech prereqs are met (skip for Basic Tools)
-    if (Array.isArray(def.requiredTechs) && def.requiredTechs.length > 0 && techId !== 'Basic Tools') {
-        const have = user.researchedTechs || [];
+
+    // Ensure tech prereqs are met
+    if (Array.isArray(def.requiredTechs) && def.requiredTechs.length > 0) {
+        const have = Object.keys(user.techLevels);
         const missing = def.requiredTechs.filter(t => !have.includes(t));
         if (missing.length) return res.status(400).json({ error: `Missing prerequisite research: ${missing.join(', ')}` });
     }
+
     // Ensure user.inventory.resources exists
     user.inventory = user.inventory || { resources: {}, units: {}, cartContents: {} };
     user.inventory.resources = user.inventory.resources || {};
@@ -829,13 +1751,32 @@ app.post('/api/research/start', async (req, res) => {
 
     // Check resources. Allow using both `inventory.resources` and `inventory.cartContents` (e.g. trade cart)
     const cart = user.inventory.cartContents || {};
-    for (const [resName, amount] of Object.entries(def.cost || {})) {
+    for (const [resName, amount] of Object.entries(cost)) {
+        if (resName === ResourceEnum.Villager) {
+            // Check total villagers across all areas
+            let totalVillagers = 0;
+            for (const r of world.regions) {
+                for (const a of r.areas) {
+                    if (a.ownerId === userId) {
+                        const st = areaStates[a.id];
+                        totalVillagers += (st && st.units && st.units[UnitTypeEnum.Villager]) || 0;
+                    }
+                }
+            }
+            if (totalVillagers < amount) {
+                return res.status(400).json({ error: `Insufficient Villagers. Need ${amount}, have ${totalVillagers}` });
+            }
+            continue;
+        }
         const haveRes = (user.inventory.resources[resName] || 0);
         const haveCart = (cart[resName] || 0);
-        if ((haveRes + haveCart) < amount) return res.status(400).json({ error: `Insufficient ${resName}` });
+        console.log(`Research Cost Check: ${resName} - Need: ${amount}, Have Inv: ${haveRes}, Have Cart: ${haveCart}`);
+        if ((haveRes + haveCart) < amount) return res.status(400).json({ error: `Insufficient ${resName}. Need ${amount}, have ${haveRes + haveCart}` });
     }
+
     // Deduct from resources first, then cartContents if needed
-    for (const [resName, amount] of Object.entries(def.cost || {})) {
+    for (const [resName, amount] of Object.entries(cost)) {
+        if (resName === ResourceEnum.Villager) continue; // Handled separately below
         let remaining = amount;
         const fromRes = Math.min(user.inventory.resources[resName] || 0, remaining);
         if (fromRes > 0) {
@@ -849,10 +1790,44 @@ app.post('/api/research/start', async (req, res) => {
     }
     user.inventory.cartContents = cart;
 
+    // Handle Villager cost for research (deducted from an area's population)
+    const villagerCost = cost[ResourceEnum.Villager] || 0;
+    if (villagerCost > 0) {
+        let remainingVillagersToDeduct = villagerCost;
+        for (const r of world.regions) {
+            for (const a of r.areas) {
+                if (a.ownerId === userId) {
+                    const st = areaStates[a.id];
+                    if (st && st.units && st.units[UnitTypeEnum.Villager] > 0) {
+                        const toDeduct = Math.min(st.units[UnitTypeEnum.Villager], remainingVillagersToDeduct);
+                        st.units[UnitTypeEnum.Villager] -= toDeduct;
+                        remainingVillagersToDeduct -= toDeduct;
+                        console.log(`Research ${techId}: Deducted ${toDeduct} villager(s) from area ${a.id}`);
+                    }
+                }
+                if (remainingVillagersToDeduct <= 0) break;
+            }
+            if (remainingVillagersToDeduct <= 0) break;
+        }
+        
+        if (remainingVillagersToDeduct > 0) {
+            console.warn(`Research ${techId}: Could not find enough villagers to deduct! Missing ${remainingVillagersToDeduct}`);
+            // We already deducted resources, so we should probably fail earlier if we can't afford the villagers.
+            // But for now, we'll just proceed as the resources are already gone.
+        }
+    }
+
     const now = Date.now();
-    // Treat durationSeconds as ticks
-    user.activeResearch = { techId, startedAt: now, ticksRemaining: def.durationSeconds, totalTicks: def.durationSeconds };
-    console.log(`User ${user.username || userId} started research: ${techId}`);
+    const adjustedTicks = Math.max(1, Math.ceil(durationSeconds));
+    user.activeResearch = { 
+        techId, 
+        level: currentLevel + 1,
+        startedAt: now, 
+        ticksRemaining: adjustedTicks, 
+        totalTicks: adjustedTicks 
+    };
+    
+    console.log(`User ${user.username || userId} started research: ${techId} (Level ${currentLevel + 1})`);
     try { await saveGameState(); } catch (e) { console.error('Failed to persist after starting research', e); }
     return res.json({ success: true, active: user.activeResearch });
 });
@@ -863,12 +1838,19 @@ app.post('/api/research/complete', async (req, res) => {
     const user = users[userId];
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (!user.activeResearch) return res.status(400).json({ error: 'No active research' });
+    
     const tech = user.activeResearch.techId;
-    user.researchedTechs = user.researchedTechs || [];
-    if (!user.researchedTechs.includes(tech)) user.researchedTechs.push(tech);
+    const nextLevel = user.activeResearch.level || 1;
+    
+    user.techLevels = user.techLevels || {};
+    user.techLevels[tech] = nextLevel;
+    
+    // Keep researchedTechs array in sync for legacy code
+    user.researchedTechs = Object.keys(user.techLevels);
+    
     user.activeResearch = null;
     try { await saveGameState(); } catch (e) { }
-    return res.json({ success: true });
+    return res.json({ success: true, techLevels: user.techLevels });
 });
 
 // Dev helper: grant a research instantly to the authenticated user (useful for testing)
@@ -880,12 +1862,15 @@ app.post('/api/research/grant', async (req, res) => {
     if (!techId || !RESEARCH_DEFS[techId]) return res.status(400).json({ error: 'Invalid tech id' });
     const user = users[userId];
     if (!user) return res.status(404).json({ error: 'User not found' });
-    user.researchedTechs = user.researchedTechs || [];
-    if (!user.researchedTechs.includes(techId)) user.researchedTechs.push(techId);
+    
+    user.techLevels = user.techLevels || {};
+    user.techLevels[techId] = (user.techLevels[techId] || 0) + 1;
+    user.researchedTechs = Object.keys(user.techLevels);
+    
     // Clear activeResearch if it matches
     if (user.activeResearch && user.activeResearch.techId === techId) user.activeResearch = null;
     try { await saveGameState(); } catch (e) { /* ignore */ }
-    return res.json({ success: true, researched: user.researchedTechs });
+    return res.json({ success: true, techLevels: user.techLevels, researched: user.researchedTechs });
 });
 
 // Return list of regions and areas (only exposes ownerId and name)
@@ -897,8 +1882,47 @@ app.get('/api/areas', (req, res) => {
         id: r.id,
         name: r.name,
         areas: r.areas.map(a => {
-            const out = { id: a.id, name: a.name, ownerId: a.ownerId };
-            if (includeOwners) out.ownerName = a.ownerId ? (users[a.ownerId] ? users[a.ownerId].username : null) : null;
+            // Resolve ownerId from multiple possible sources to be robust:
+            // 1. persisted savedAreaOwners (loaded at startup)
+            // 2. area metadata stored on the region object (a.ownerId)
+            // 3. any ownerId stored on the areaStates entry (if present)
+            const resolvedOwnerId = (savedAreaOwners[a.id] || a.ownerId || (areaStates[a.id] && areaStates[a.id].ownerId) || null);
+            const out = { id: a.id, name: a.name, ownerId: resolvedOwnerId };
+            
+            // Check for Shadow Guild for radar pulse
+            if (resolvedOwnerId && areaStates[a.id]) {
+                const state = areaStates[a.id];
+                if (state.buildings && state.buildings['ShadowGuild'] > 0) {
+                    out.hasShadowGuild = true;
+                    
+                    // If this is the requester's area, check for nearby movement
+                    const userId = authFromReq(req);
+                    if (userId === resolvedOwnerId) {
+                        const guildLevel = state.buildings['ShadowGuild'];
+                        const assignedSpies = state.assignments['ShadowGuild'] || 0;
+                        const effectiveSpyLevel = calculateEffectiveSpyLevel(guildLevel, assignedSpies);
+                        const radius = getDetectionRadius(effectiveSpyLevel);
+                        
+                        // Find any expedition within radius that isn't owned by the player
+                        const detected = activeExpeditions.find(ex => {
+                            if (ex.ownerId === userId) return false;
+                            const dist = calculateDistance(a.id, ex.currentLocation || ex.originAreaId);
+                            return dist <= radius;
+                        });
+                        
+                        if (detected) {
+                            out.detectedMovement = {
+                                direction: getWatchDirection(detected.originAreaId, detected.targetAreaId),
+                                sizeLabel: getArmySizeLabel(Object.values(detected.units || {}).reduce((a, b) => a + b, 0))
+                            };
+                        }
+                    }
+                }
+            }
+
+            // Include any salvage present on the tile so the frontend can render icons
+            try { out.salvagePool = (areaStates[a.id] && areaStates[a.id].salvagePool) ? areaStates[a.id].salvagePool : {}; } catch (e) { out.salvagePool = {}; }
+            if (includeOwners) out.ownerName = resolvedOwnerId ? (users[resolvedOwnerId] ? users[resolvedOwnerId].username : null) : null;
             return out;
         })
     }));
@@ -951,8 +1975,23 @@ app.get('/api/area/:areaId', async (req, res) => {
                         state.buildings[item.id] = (state.buildings[item.id] || 0) + 1;
                         console.log(`(On-read) Construction Complete: ${item.name} -> Lvl ${state.buildings[item.id]}`);
                     } else if (item.type === 'Unit') {
-                        state.units[item.id] = (state.units[item.id] || 0) + (item.count || 0);
-                        console.log(`(On-read) Recruitment Complete: ${item.name}`);
+                        // Special-case: converting villagers into non-working units like Scholars
+                        try {
+                            if (item.id === UnitTypeEnum.Scholar) {
+                                const qty = (item.count || 0);
+                                state.units[UnitTypeEnum.Scholar] = (state.units[UnitTypeEnum.Scholar] || 0) + qty;
+                                const villagers = state.units[UnitTypeEnum.Villager] || 0;
+                                const toConvert = Math.min(villagers, qty);
+                                state.units[UnitTypeEnum.Villager] = Math.max(0, villagers - toConvert);
+                                console.log(`(On-read) Scholar Conversion Complete: converted ${toConvert} villagers into Scholars`);
+                            } else {
+                                state.units[item.id] = (state.units[item.id] || 0) + (item.count || 0);
+                                console.log(`(On-read) Recruitment Complete: ${item.name}`);
+                            }
+                        } catch (e) {
+                            state.units[item.id] = (state.units[item.id] || 0) + (item.count || 0);
+                            console.log(`(On-read) Recruitment Complete: ${item.name}`);
+                        }
                     }
                     changed = true;
                     continue; // check next item
@@ -1003,48 +2042,59 @@ app.get('/api/area/:areaId', async (req, res) => {
             // Evaluate prereqs for display
             const evalRes = evaluatePrereqs(state, users[areaMeta.ownerId], id);
 
-            // Assigned count and maxAssign cap (simple cap: 50 * level, minimum cap 5)
+            // Assigned count and maxAssign cap
             const assigned = (state.assignments && state.assignments[id]) || 0;
-            // No per-building villager capacity: leave maxAssign undefined
-            const maxAssign = null;
-            // per-worker rates placeholder
+            const cfgForAssign = BUILDING_CONFIG[id] || {};
+            const maxAssign = (cfgForAssign.workerCapacity ? (cfgForAssign.workerCapacity * level) : (cfgForAssign.workforceCap ? (cfgForAssign.workforceCap * level) : Math.max(1, Math.floor(3 + (level * 1.5)))));
+
+            // Helper to compute production matching game loop math (per-second values)
+            const productionPerSecond = {};
             let perWorkerRates = {};
-            // Estimate per-second production for this building (simple model matching server gameLoop rates)
-            const RATES = {
-                // Match gameLoop per-worker rates
-                timberPerWorkerPerSecond: 0.02,
-                stonePerLevelPerSecond: 0.05,
-                stonePitPerWorkerPerSecond: 0.02,
-                breadPerLevelPerSecond: 0.12,
-                foodPerWorkerPerSecond: 0.05,
-                hidesPerWorkerPerSecond: 0.03
+            // Helper: compounding growth per level (level 1 => baseRate, level N => baseRate * growth^(N-1))
+            const getOutput = (baseRate, lvl, workers = 1) => {
+                if (!baseRate || lvl <= 0 || workers <= 0) return 0;
+                const workerFactor = Math.pow(Math.max(1, workers), WORKER_EXP);
+                const levelMultiplier = Math.pow(PRODUCTION_GROWTH, Math.max(0, lvl - 1));
+                return baseRate * workerFactor * levelMultiplier * (PRODUCTION_GLOBAL_MULTIPLIER || 1);
             };
 
-            const productionPerSecond = {};
-            // Compute production per second and per-worker contribution where applicable
+            // Compute building-specific outputs using shared PRODUCTION_RATES
             if (id === 'LoggingCamp' && level > 0) {
-                const perWorker = RATES.timberPerWorkerPerSecond * level; // per assigned villager contribution
+                const perWorker = getOutput(PRODUCTION_RATES.timberPerWorkerPerSecond, level, 1);
                 productionPerSecond[ResourceEnum.Timber] = perWorker * assigned;
                 perWorkerRates = { [ResourceEnum.Timber]: perWorker };
-                // Planks role: workers assigned to 'LoggingCamp:Planks' will consume timber -> planks (4:1)
-                const assignedPlanks = (state.assignments && state.assignments['LoggingCamp:Planks']) || 0;
-                if (assignedPlanks > 0) {
-                    const perWorkerPlank = (RATES.timberPerWorkerPerSecond * level) / 4.0; // planks produced per worker/sec (derived)
-                    productionPerSecond[ResourceEnum.Planks] = perWorkerPlank * assignedPlanks;
-                    perWorkerRates[ResourceEnum.Planks] = perWorkerPlank;
-                }
-                // Expose assignedPlanks to client so UI can render separate assignment control
-                // (will be undefined for other buildings)
-                var _assignedPlanksForUI = assignedPlanks;
             }
-            if (id === 'DeepMine' && level > 0) productionPerSecond[ResourceEnum.Stone] = level * RATES.stonePerLevelPerSecond;
-            if (id === 'Farmhouse' && level > 0) productionPerSecond[ResourceEnum.Bread] = level * RATES.breadPerLevelPerSecond;
-            if (id === 'Farm' && level > 0) {
-                const perWorker = RATES.foodPerWorkerPerSecond * level;
+            if (id === 'Sawpit' && level > 0) {
+                const perWorker = getOutput(PRODUCTION_RATES.planksPerWorkerPerSecond, level, 1);
+                if (assigned > 0) productionPerSecond[ResourceEnum.Planks] = perWorker * assigned;
+                perWorkerRates = { [ResourceEnum.Planks]: perWorker };
+            }
+            if (id === 'Bloomery' && level > 0) {
+                const perWorker = getOutput(PRODUCTION_RATES.ingotPerWorkerPerSecond, level, 1);
+                if (assigned > 0) productionPerSecond[ResourceEnum.IronIngot] = perWorker * assigned;
+                perWorkerRates = { [ResourceEnum.IronIngot]: perWorker };
+            }
+            if (id === 'CharcoalKiln' && level > 0) {
+                const perWorker = getOutput(PRODUCTION_RATES.coalPerWorkerPerSecond, level, 1);
+                if (assigned > 0) productionPerSecond[ResourceEnum.Coal] = perWorker * assigned;
+                perWorkerRates = { [ResourceEnum.Coal]: perWorker };
+            }
+            if (id === 'BlastFurnace' && level > 0) {
+                const perWorker = getOutput(PRODUCTION_RATES.steelPerWorkerPerSecond, level, 1);
+                if (assigned > 0) productionPerSecond[ResourceEnum.Steel] = perWorker * assigned;
+                perWorkerRates = { [ResourceEnum.Steel]: perWorker };
+            }
+            if (id === 'DeepMine' && level > 0) productionPerSecond[ResourceEnum.Stone] = getOutput(PRODUCTION_RATES.stonePerLevelPerSecond, level, 1);
+            if (id === 'Farmhouse' && level > 0) {
+                const perWorker = getOutput(PRODUCTION_RATES.foodPerWorkerPerSecond, level, 1);
                 if (assigned > 0) productionPerSecond[ResourceEnum.Food] = perWorker * assigned;
-                // Hides unlocked at higher farm levels
+                perWorkerRates = { [ResourceEnum.Food]: perWorker };
+            }
+            if (id === 'Farm' && level > 0) {
+                const perWorker = getOutput(PRODUCTION_RATES.foodPerWorkerPerSecond, level, 1);
+                if (assigned > 0) productionPerSecond[ResourceEnum.Food] = perWorker * assigned;
                 if (level >= 5) {
-                    const hidesPerWorker = RATES.hidesPerWorkerPerSecond * level;
+                    const hidesPerWorker = getOutput(PRODUCTION_RATES.hidesPerWorkerPerSecond, level, 1);
                     if (assigned > 0) productionPerSecond[ResourceEnum.Hides] = hidesPerWorker * assigned;
                     perWorkerRates = { [ResourceEnum.Food]: perWorker, [ResourceEnum.Hides]: hidesPerWorker };
                 } else {
@@ -1052,7 +2102,7 @@ app.get('/api/area/:areaId', async (req, res) => {
                 }
             }
             if (id === 'StonePit' && level > 0) {
-                const perWorker = RATES.stonePitPerWorkerPerSecond * level;
+                const perWorker = getOutput(PRODUCTION_RATES.stonePitPerWorkerPerSecond, level, 1);
                 if (assigned > 0) productionPerSecond[ResourceEnum.Stone] = perWorker * assigned;
                 perWorkerRates = { [ResourceEnum.Stone]: perWorker };
             }
@@ -1085,16 +2135,13 @@ app.get('/api/area/:areaId', async (req, res) => {
                 productionPerHour,
                 perWorkerRates: perWorkerRates || {},
                 perWorkerRatesPerHour,
-                // Support role-style plank assignments (LoggingCamp:Planks)
-                assignedPlanks: (state.assignments && (state.assignments[id + ':Planks'])) || 0,
-                canProducePlanks: (id === 'LoggingCamp') ? (((users[areaMeta.ownerId] && users[areaMeta.ownerId].researchedTechs) || []).includes('Timber Planks')) : false,
+                // No legacy LoggingCamp plank-role supported here; Sawpit handles Planks production.
                 // Expose housing & research progression data for UI (TownHall)
                 housingByLevel: config.housingByLevel || null,
                 researchSlotsByLevel: config.researchSlotsByLevel || null,
                 missingReqs: evalRes.missing || [],
                 assigned,
-                assignedPlanks: (typeof _assignedPlanksForUI !== 'undefined') ? _assignedPlanksForUI : 0,
-                canProducePlanks: !!(users[areaMeta.ownerId] && Array.isArray(users[areaMeta.ownerId].researchedTechs) && users[areaMeta.ownerId].researchedTechs.includes('Timber Planks')),
+                maxAssign,
                 category: config.category || null,
                 tags: config.tags || [],
                 relatedTechs: (config.relatedTechs || []).map(t => ({ id: t, researched: ((users[areaMeta.ownerId] && users[areaMeta.ownerId].researchedTechs) || []).includes(t) })),
@@ -1103,16 +2150,21 @@ app.get('/api/area/:areaId', async (req, res) => {
             };
         });
 
-        // Compute aggregated food total (Berries, Meat, Fish, Bread)
-        const foodTotal = (state.resources[ResourceEnum.Food] || 0)
-            + (state.resources[ResourceEnum.Fish] || 0)
-            + (state.resources[ResourceEnum.Bread] || 0);
+        // Compute aggregated food total (unified Food)
+        const foodTotal = (state.resources[ResourceEnum.Food] || 0);
 
         // Population consumption (sustenance units per second).
-        const sustenancePerSecond = (state.population || 0) * SUSTENANCE_PER_POP_PER_SECOND;
+        // Apply Preservation tech buff (-3% upkeep per level)
+        let upkeepMult = 1.0;
+        if (users[areaMeta.ownerId]) {
+            const presLvl = (users[areaMeta.ownerId].techLevels && users[areaMeta.ownerId].techLevels['Preservation']) || 0;
+            if (presLvl > 0) upkeepMult = Math.max(0.1, 1.0 - (presLvl * 0.03));
+        }
+
+        const sustenancePerSecond = (state.population || 0) * SUSTENANCE_PER_POP_PER_SECOND * upkeepMult;
         const sustenancePerHour = sustenancePerSecond * 3600;
-        const breadValue = FOOD_SUSTENANCE_VALUES[ResourceEnum.Bread] || 1;
-        const breadEquivalentPerHour = sustenancePerHour / breadValue;
+        const foodValue = FOOD_SUSTENANCE_VALUES[ResourceEnum.Food] || 1;
+        const foodEquivalentPerHour = sustenancePerHour / foodValue;
 
         return res.json({
             owned: true,
@@ -1121,10 +2173,17 @@ app.get('/api/area/:areaId', async (req, res) => {
             ownerId: areaMeta.ownerId,
             ownerName: areaMeta.ownerId ? (users[areaMeta.ownerId] ? users[areaMeta.ownerId].username : null) : null,
             resources: state.resources,
-            stats: { currentPop: state.population, maxPop: state.housingCapacity, approval: state.approval, foodTotal,
-                     populationConsumptionPerSecond: sustenancePerSecond,
-                     populationConsumptionPerHour: Math.round(sustenancePerHour),
-                     breadEquivalentPerHour: Number(breadEquivalentPerHour.toFixed(2)) },
+            stats: {
+                currentPop: state.population,
+                maxPop: state.housingCapacity,
+                approval: state.approval,
+                foodTotal,
+                spyLevel: calculateEffectiveSpyLevel(state.buildings['ShadowGuild'] || 0, state.assignments['ShadowGuild'] || 0),
+                captives: state.resources[ResourceEnum.Captives] || 0,
+                populationConsumptionPerSecond: sustenancePerSecond,
+                populationConsumptionPerHour: Math.round(sustenancePerHour),
+                foodEquivalentPerHour: Number(foodEquivalentPerHour.toFixed(2))
+            },
             queue: state.queue.map(item => ({
                 ...item,
                 progress: (() => {
@@ -1137,12 +2196,129 @@ app.get('/api/area/:areaId', async (req, res) => {
             buildings: buildingsWithCosts,
             units: Object.entries(state.units).map(([type, count]) => ({ type, count })),
             assignments: state.assignments || {},
-            idleReasons: state.idleReasons || {}
+            idleReasons: state.idleReasons || {},
+            missions: (state.missions || []).map(m => ({
+                id: m.id,
+                type: m.type,
+                originAreaId: m.originAreaId,
+                targetAreaId: m.targetAreaId,
+                units: m.units,
+                ticksRemaining: m.ticksRemaining,
+                totalTicks: m.totalTicks,
+                status: m.status,
+                // Provide a client-friendly expected return timestamp (ms)
+                expectedReturnAt: Date.now() + ((m.ticksRemaining || 0) * 1000)
+            }))
         });
     }
 
     // Not owned: only reveal owner (if any) and name
     return res.json({ owned: false, id: areaMeta.id, name: areaMeta.name, ownerId: areaMeta.ownerId, ownerName: areaMeta.ownerId ? (users[areaMeta.ownerId] ? users[areaMeta.ownerId].username : null) : null });
+});
+
+// Collect salvage from a target area into one of the player's owned areas
+app.post('/api/area/:areaId/collect-salvage', async (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const targetAreaId = req.params.areaId;
+    const body = req.body || {};
+    const collectorAreaId = body.collectorAreaId;
+
+    // Validate target exists
+    let targetMeta = null;
+    for (const r of world.regions) {
+        const a = r.areas.find(x => x.id === targetAreaId);
+        if (a) { targetMeta = a; break; }
+    }
+    if (!targetMeta) return res.status(404).json({ error: 'Target area not found' });
+
+    const targetState = areaStates[targetAreaId] || null;
+    if (!targetState || !targetState.salvagePool || Object.keys(targetState.salvagePool).length === 0) {
+        return res.json({ success: true, transferred: {}, message: 'No salvage to collect' });
+    }
+
+    // Validate collector area ownership
+    if (!collectorAreaId) return res.status(400).json({ error: 'collectorAreaId required' });
+    // Find collector area metadata
+    let collectorMeta = null;
+    for (const r of world.regions) {
+        const a = r.areas.find(x => x.id === collectorAreaId);
+        if (a) { collectorMeta = a; break; }
+    }
+    if (!collectorMeta) return res.status(404).json({ error: 'Collector area not found' });
+    if (collectorMeta.ownerId !== userId) return res.status(403).json({ error: 'You do not own the collector area' });
+
+    const collectorState = areaStates[collectorAreaId];
+    if (!collectorState) return res.status(404).json({ error: 'Collector area state not found' });
+
+
+    // Authorization checks: ensure collector within allowed travel range and has transport capacity
+    const MAX_COLLECT_TICKS = parseInt(process.env.MAX_COLLECT_TICKS || '60', 10);
+
+    // Compute travel ticks from collector -> target using group's units
+    const travelTicks = computeTravelTicks(collectorAreaId, targetAreaId, collectorState.units || {});
+    if (travelTicks > MAX_COLLECT_TICKS) return res.status(403).json({ error: 'Collector area too far to send transport' });
+
+    // Compute total available carry capacity in collector's units (SupplyWagon.carryCapacity and TradeCart default)
+    const TRADE_CART_CAPACITY = parseInt(process.env.TRADE_CART_CAPACITY || '500', 10);
+    let totalCapacity = 0;
+    try {
+        Object.entries(collectorState.units || {}).forEach(([ut, cnt]) => {
+            const cfg = UNIT_CONFIG[ut];
+            const n = Math.max(0, cnt || 0);
+            if (!cfg) {
+                // Fallback: treat TradeCart specially if not in UNIT_CONFIG
+                if (ut === UnitTypeEnum.TradeCart) totalCapacity += TRADE_CART_CAPACITY * n;
+                return;
+            }
+            if (cfg.carryCapacity) totalCapacity += (cfg.carryCapacity || 0) * n;
+            if (ut === UnitTypeEnum.TradeCart) totalCapacity += TRADE_CART_CAPACITY * n;
+        });
+    } catch (e) { console.error('Capacity calc error', e); }
+
+    if (totalCapacity <= 0) return res.status(403).json({ error: 'No transport capacity available in collector area (no carts/wagons)' });
+
+    // Transfer salvage to collector area's resources up to totalCapacity.
+    const transferred = {};
+    const salvage = Object.assign({}, targetState.salvagePool || {});
+    const totalSalvageAmount = Object.values(salvage).reduce((a,b) => a + (b||0), 0);
+    if (totalSalvageAmount <= 0) return res.json({ success: true, transferred: {}, message: 'No salvage to collect' });
+
+    const fraction = Math.min(1, totalCapacity / totalSalvageAmount);
+    Object.entries(salvage).forEach(([resKey, amt]) => {
+        const available = Math.max(0, Math.floor(amt || 0));
+        if (!available) return;
+        const toTransfer = Math.floor(available * fraction);
+        if (!toTransfer) return;
+        collectorState.resources[resKey] = (collectorState.resources[resKey] || 0) + toTransfer;
+        transferred[resKey] = toTransfer;
+        // Subtract transferred from target salvagePool
+        targetState.salvagePool[resKey] = Math.max(0, (targetState.salvagePool[resKey] || 0) - toTransfer);
+        // Special handling for battle wrecks: potential refugee arrival
+        if (resKey === '__battle_wrecks' && toTransfer > 0) {
+            try {
+                const owner = users[userId];
+                const hasOpenBorders = owner && owner.techLevels && owner.techLevels['Open Borders Policy'];
+                if (hasOpenBorders) {
+                    // For each wreck transferred, 20% chance to get 1-3 refugees
+                    for (let i = 0; i < toTransfer; i++) {
+                        if (Math.random() <= 0.20) {
+                            const refugees = 1 + Math.floor(Math.random() * 3);
+                            collectorState.population = (collectorState.population || 0) + refugees;
+                            collectorState.units = collectorState.units || {};
+                            collectorState.units[UnitTypeEnum.Villager] = (collectorState.units[UnitTypeEnum.Villager] || 0) + refugees;
+                        }
+                    }
+                }
+            } catch (e) { console.error('Refugee processing error', e); }
+        }
+    });
+
+    // Cleanup zeroed entries
+    Object.keys(targetState.salvagePool || {}).forEach(k => { if (!targetState.salvagePool[k]) delete targetState.salvagePool[k]; });
+
+    try { await saveGameState(); } catch (e) { console.error('Failed saving after collect', e); }
+    return res.json({ success: true, transferred });
 });
 
 // Claim an unowned area
@@ -1190,10 +2366,25 @@ app.post('/api/area/:areaId/claim', async (req, res) => {
 
     // Give initial starter buildings at level 1 for claimed area
     try {
+        // Provide basic infrastructure so assigned villagers have places to work
         newState.buildings['LoggingCamp'] = 1;
-        newState.buildings['Farm'] = 1;
+        newState.buildings['Farmhouse'] = 1;
         newState.buildings['TownHall'] = 1;
-        newState.buildings['StonePit'] = 1;
+        // SurfaceMine provides Ore; include it so ore assignments are valid
+        newState.buildings['SurfaceMine'] = 1;
+        // Ensure housing capacity at least covers starter population
+        newState.housingCapacity = Math.max(newState.housingCapacity || 0, 10);
+        // Transfer villagers from player's inventory if present, otherwise default to 10
+        const availableVillagers = (user.inventory && user.inventory.units && user.inventory.units[UnitTypeEnum.Villager]) || 0;
+        const transferVillagers = availableVillagers > 0 ? Math.min(availableVillagers, 1000) : 10;
+        newState.population = transferVillagers;
+        newState.units[UnitTypeEnum.Villager] = transferVillagers;
+        // If villagers were taken from player's inventory, deduct them
+        if (availableVillagers > 0) {
+            user.inventory.units[UnitTypeEnum.Villager] = Math.max(0, availableVillagers - transferVillagers);
+        }
+        // Start with no default worker assignments; players choose where villagers work
+        newState.assignments = newState.assignments || {};
         // If TownHall config defines housingByLevel, update housing capacity to level 1 value
         try {
             const thCfg = BUILDING_CONFIG['TownHall'];
@@ -1229,17 +2420,37 @@ app.post('/api/area/:areaId/assign', async (req, res) => {
     const state = areaStates[areaId];
     if (!state) return res.status(500).json({ error: 'Area state missing' });
 
+    // If count is 0, we allow unassigning from ANY key (to clean up ghost assignments)
+    if (count === 0) {
+        if (!state.assignments) state.assignments = {};
+        delete state.assignments[buildingId];
+        try {
+            await saveGameState();
+        } catch (e) {
+            console.error('Failed to save game state after unassignment:', e);
+            return res.status(500).json({ success: false, error: 'Failed to persist assignments' });
+        }
+        return res.json({ success: true, assignments: state.assignments, idleReasons: state.idleReasons || {}, units: state.units, buildings: Object.keys(state.buildings).map(id => ({ id, level: state.buildings[id] })) });
+    }
+
     // Allow role-style assignment ids like "LoggingCamp:Planks" — validate the base building id
     const baseParts = (buildingId || '').split(':');
-    const baseBuildingId = baseParts[0];
+    let baseBuildingId = baseParts[0];
+    // Defensive normalization: accept some alternate client-side labels that may refer to the TownHall/Settlement
+    if (baseBuildingId && typeof baseBuildingId === 'string') {
+        const keyLower = baseBuildingId.toLowerCase();
+        if (keyLower.includes('town') || keyLower.includes('settle') || keyLower === 'settlement') baseBuildingId = 'TownHall';
+    }
+    console.log('[assign] user=', userId, 'area=', areaId, 'buildingId=', buildingId, 'baseBuildingId=', baseBuildingId, 'count=', count);
     if (!BUILDING_CONFIG[baseBuildingId]) return res.status(400).json({ error: 'Invalid building id' });
 
     // Building must be at least level 1 to accept assignments
     const level = state.buildings[baseBuildingId] || 0;
     if (level < 1) return res.status(400).json({ error: 'Building must be at least level 1 to assign workers' });
 
-    // Prevent assigning villagers to the TownHall/Settlement (it represents housing)
-    if (baseBuildingId === 'TownHall' || baseBuildingId === 'Storehouse') return res.status(400).json({ error: 'Cannot assign villagers to the TownHall/Settlement or Storehouse' });
+    // Prevent assigning villagers to the Storehouse (it represents housing/storage)
+    // Note: TownHall IS allowed (for gathering)
+    if (baseBuildingId === 'Storehouse') return res.status(400).json({ error: 'Cannot assign villagers to the Storehouse' });
 
     // Calculate available villagers (primary unit key is 'Villager')
     const totalVillagers = state.units[UnitTypeEnum.Villager] || 0;
@@ -1250,7 +2461,11 @@ app.post('/api/area/:areaId/assign', async (req, res) => {
 
     // Enforce per-building capacity: default to 3 + level * 1.5 if not specified in config
     const cfg = BUILDING_CONFIG[baseBuildingId] || {};
-    const maxByConfig = cfg.workerCapacity ? (cfg.workerCapacity * level) : Math.max(1, Math.floor(3 + (level * 1.5)));
+    // Support both legacy `workerCapacity` and `workforceCap` keys from config.
+    // If provided, treat the configured cap as per-level and multiply by building level.
+    let maxByConfig = Math.max(1, Math.floor(3 + (level * 1.5)));
+    if (typeof cfg.workerCapacity === 'number') maxByConfig = cfg.workerCapacity * Math.max(1, level);
+    else if (typeof cfg.workforceCap === 'number') maxByConfig = cfg.workforceCap * Math.max(1, level);
     if (count > maxByConfig) return res.status(400).json({ error: `Exceeds max workers for ${buildingId}: ${maxByConfig}` });
 
     // Apply assignment
@@ -1273,7 +2488,11 @@ app.post('/api/area/:areaId/upgrade', async (req, res) => {
     const userId = authFromReq(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const areaId = req.params.areaId;
-    const { buildingId } = req.body;
+    const { buildingId } = req.body || {};
+    if (!buildingId || typeof buildingId !== 'string') return res.status(400).json({ success: false, message: 'Missing buildingId in request body' });
+    // Normalize building key (strip role suffixes like ':Planks')
+    const baseBuildingKey = buildingId.split(':')[0];
+    if (!baseBuildingKey || !BUILDING_CONFIG[baseBuildingKey]) return res.status(400).json({ success: false, message: `Invalid building id: ${buildingId}` });
 
     // Validate area
     let areaMeta = null;
@@ -1287,49 +2506,21 @@ app.post('/api/area/:areaId/upgrade', async (req, res) => {
     const state = areaStates[areaId];
     if (!state) return res.status(500).json({ error: 'Area state missing' });
 
-    // Check prereqs before attempting construction
-    const prereq = BUILDING_PREREQS[buildingId];
+    // Check prereqs before attempting construction using centralized validator
     const user = users[userId];
-    if (!prereq) {
-        return res.status(400).json({ success: false, message: 'This building is locked by default (no prereqs defined).' });
+    try {
+        const { allowed, missing } = evaluatePrereqs(state, user, baseBuildingKey);
+        if (!allowed) return res.status(400).json({ success: false, message: `Prerequisites not met: ${Array.isArray(missing) ? missing.join('; ') : String(missing)}` });
+    } catch (e) {
+        console.error('Prereq evaluation failed:', e);
+        return res.status(500).json({ success: false, message: 'Failed to evaluate prerequisites' });
     }
 
-    // If explicitly allowed at start, skip further checks
-    if (!prereq.allowedAtStart) {
-        const missing = [];
+    // Re-evaluate to be safe
+    const prereqEval = evaluatePrereqs(state, user, baseBuildingKey);
+    if (!prereqEval.allowed) return res.status(400).json({ success: false, message: `Prerequisites not met: ${Array.isArray(prereqEval.missing) ? prereqEval.missing.join('; ') : String(prereqEval.missing)}` });
 
-        // Tech requirement
-        if (prereq.tech) {
-            const need = Array.isArray(prereq.tech) ? prereq.tech : [prereq.tech];
-            const have = user.researchedTechs || [];
-            const notHave = need.filter(t => !have.includes(t));
-            if (notHave.length) missing.push(`tech: ${notHave.join(', ')}`);
-        }
-
-        // Building level requirements
-        if (prereq.buildings) {
-            for (const [bid, lvl] of Object.entries(prereq.buildings)) {
-                const cur = state.buildings[bid] || 0;
-                if (cur < lvl) missing.push(`building ${bid} L${lvl} (have L${cur})`);
-            }
-        }
-
-        // Population requirement
-        if (prereq.population) {
-            const curPop = state.population || 0;
-            if (curPop < prereq.population) missing.push(`population >= ${prereq.population} (have ${curPop})`);
-        }
-
-        if (missing.length) {
-            return res.status(400).json({ success: false, message: `Prerequisites not met: ${missing.join('; ')}` });
-        }
-    }
-
-    // Additional prereq check using evaluator (already done above for UI, but re-check here)
-    const prereqEval = evaluatePrereqs(state, user, buildingId);
-    if (!prereqEval.allowed) return res.status(400).json({ success: false, message: `Prerequisites not met: ${prereqEval.missing.join('; ')}` });
-
-    const result = startConstruction(state, buildingId);
+    const result = startConstruction(state, baseBuildingKey);
     if (result.success) {
         try { await saveGameState(); } catch (e) { }
         return res.json({ success: true });
@@ -1405,6 +2596,283 @@ app.post('/api/area/:areaId/cancel-upgrade', async (req, res) => {
         console.error('Failed to cancel queue item:', e);
         return res.status(500).json({ error: 'Failed to cancel queue item' });
     }
+});
+
+// Recruit units: enqueue unit training on an owned area
+app.post('/api/area/:areaId/recruit', async (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const areaId = req.params.areaId;
+    const { unitId, count } = req.body || {};
+    const qty = Number(count) || 0;
+    console.log(`Recruit Request: Area=${areaId}, Unit=${unitId}, Qty=${qty}`);
+    if (!unitId || qty <= 0) return res.status(400).json({ error: 'Invalid unitId or count' });
+
+    // Locate area
+    let areaMeta = null;
+    for (const r of world.regions) {
+        const a = r.areas.find(x => x.id === areaId);
+        if (a) { areaMeta = a; break; }
+    }
+    if (!areaMeta) return res.status(404).json({ error: 'Area not found' });
+    if (areaMeta.ownerId !== userId) return res.status(403).json({ error: 'Not owner' });
+
+    const state = areaStates[areaId];
+    if (!state) return res.status(500).json({ error: 'Area state missing' });
+
+    // Lookup unit config
+    const unitDef = getUnitConfig(unitId);
+    if (!unitDef) {
+        console.log(`Recruit Failed: Unknown unit type ${unitId}`);
+        return res.status(400).json({ error: 'Unknown unit type' });
+    }
+
+    // Building must exist and be at required level
+    const requiredBuilding = unitDef.requiredBuilding || 'Barracks';
+    const requiredLevel = unitDef.requiredBuildingLevel || 1;
+    const bLevel = state.buildings[requiredBuilding] || 0;
+    
+    if (bLevel < requiredLevel) {
+        console.log(`Recruit Failed: ${requiredBuilding} level is ${bLevel}, need ${requiredLevel}`);
+        return res.status(400).json({ error: `${requiredBuilding} level ${requiredLevel} must be built to recruit this unit` });
+    }
+
+    // Check research requirement
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (unitDef.requiredResearch) {
+        const techLvl = (user.techLevels && user.techLevels[unitDef.requiredResearch]) || 0;
+        if (techLvl < 1) {
+            return res.status(400).json({ error: `Requires research: ${unitDef.requiredResearch}` });
+        }
+    }
+
+    const lc = String(unitId).toLowerCase();
+
+    // Check population availability (population acts as free slots)
+    const popCostTotal = (unitDef.populationCost || 1) * qty;
+    const freePop = Math.max(0, (state.housingCapacity || 0) - (state.population || 0));
+    if (freePop < popCostTotal && lc !== 'scholar') {
+        console.log(`Recruit Failed: Insufficient housing. Need ${popCostTotal}, have ${freePop}`);
+        return res.status(400).json({ error: `Insufficient housing capacity. Need ${popCostTotal} free slots, have ${freePop}.` });
+    }
+
+    // Prevent multiple simultaneous unit training in the same area: enforce research-like single active training
+    const hasActiveUnitTraining = (state.queue || []).some(it => it && it.type === 'Unit');
+    if (hasActiveUnitTraining) {
+        console.log(`Recruit Failed: Another unit training active in area ${areaId}`);
+        return res.status(400).json({ error: 'Another unit training is already active in this area' });
+    }
+
+    // Check resources from the area's stock ONLY
+    state.resources = state.resources || {};
+    
+    // Ensure all resource keys exist to avoid NaN issues
+    Object.values(ResourceEnum).forEach(r => { 
+        if (typeof state.resources[r] === 'undefined') state.resources[r] = 0; 
+    });
+
+    console.log(`Recruitment Resource Check for Area ${areaId}`);
+
+    // Compute total cost
+    const totalCost = {};
+    Object.entries(unitDef.cost || {}).forEach(([resKey, amt]) => {
+        totalCost[resKey] = (totalCost[resKey] || 0) + (Number(amt) || 0) * qty;
+    });
+    
+    // Verify total resources in Area ONLY
+    for (const [resKey, amt] of Object.entries(totalCost)) {
+        const haveArea = (state.resources[resKey] || 0);
+        
+        if (haveArea < amt) {
+            console.log(`Recruit Failed: Insufficient ${resKey} in area. Need ${amt}, have ${haveArea}`);
+            return res.status(400).json({ error: `Insufficient ${resKey} in this area. Need ${amt}, have ${haveArea.toFixed(0)}.` });
+        }
+    }
+
+    // Deduct resources from Area ONLY
+    for (const [resKey, amt] of Object.entries(totalCost)) {
+        state.resources[resKey] -= amt;
+    }
+
+    // Compute training ticks: unitDef.trainingTime * qty (sequential)
+    // Apply Drafting Tactics buff (-5% training time per level)
+    let trainingMult = 1.0;
+    if (user.techLevels) {
+        const draftLvl = user.techLevels['Drafting Tactics'] || 0;
+        if (draftLvl > 0) trainingMult = Math.max(0.1, 1.0 - (draftLvl * 0.05));
+    }
+
+    const ticks = Math.ceil((unitDef.trainingTime || 1) * qty * trainingMult);
+    const now = Date.now();
+
+    state.queue.push({
+        type: 'Unit',
+        id: unitId,
+        name: unitDef.name || unitId,
+        count: qty,
+        cost: unitDef.cost || {},
+        totalTicks: ticks,
+        ticksRemaining: ticks,
+        startedAt: now,
+        completesAt: now + (ticks * 1000)
+    });
+
+    try { await saveGameState(); } catch (e) { /* ignore */ }
+    return res.json({ success: true, queued: true, queueLen: state.queue.length });
+});
+
+// Attack logic: send units from an owned area to a target area
+app.post('/api/area/:areaId/attack', async (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const areaId = req.params.areaId;
+    const { targetAreaId, units } = req.body || {}; // units: { Militia: 10, ... }
+
+    if (!targetAreaId || !units || Object.keys(units).length === 0) {
+        return res.status(400).json({ error: 'Missing targetAreaId or units' });
+    }
+
+    const originState = areaStates[areaId];
+    if (!originState) return res.status(404).json({ error: 'Origin area not found' });
+
+    // Verify ownership
+    let areaMeta = null;
+    for (const r of world.regions) {
+        const a = r.areas.find(x => x.id === areaId);
+        if (a) { areaMeta = a; break; }
+    }
+    if (!areaMeta || areaMeta.ownerId !== userId) return res.status(403).json({ error: 'Forbidden' });
+
+    const targetState = areaStates[targetAreaId];
+    if (!targetState) return res.status(404).json({ error: 'Target area not found' });
+
+    // Verify units
+    for (const [uType, count] of Object.entries(units)) {
+        // Special-case Villagers: only idle villagers (not assigned) may be sent
+        if (uType === 'Villager') {
+            const totalVillagers = originState.units[UnitTypeEnum.Villager] || 0;
+            const assignedTotal = Object.values(originState.assignments || {}).reduce((a, b) => a + (b || 0), 0);
+            const idleVillagers = Math.max(0, totalVillagers - assignedTotal);
+            if (idleVillagers < count) return res.status(400).json({ error: `Not enough idle Villagers (idle: ${idleVillagers})` });
+            continue;
+        }
+        if ((originState.units[uType] || 0) < count) {
+            return res.status(400).json({ error: `Insufficient ${uType}` });
+        }
+    }
+
+    // Deduct units
+    for (const [uType, count] of Object.entries(units)) {
+        originState.units[uType] -= count;
+    }
+
+    // Calculate travel time based on distance and unit speeds
+    const travelTicks = computeTravelTicks(areaId, targetAreaId, units);
+
+    // Add mission
+    const missionId = `attack_${Date.now()}`;
+    originState.missions = originState.missions || [];
+    originState.missions.push({
+        id: missionId,
+        type: 'Attack',
+        originAreaId: areaId,
+        targetAreaId: targetAreaId,
+        units: units,
+        ticksRemaining: travelTicks,
+        totalTicks: travelTicks,
+        status: 'Traveling',
+        loot: {}
+    });
+
+    try { await saveGameState(); } catch (e) { /* ignore */ }
+    res.json({ success: true, missionId });
+});
+
+app.post('/api/area/:areaId/expedition', async (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const areaId = req.params.areaId;
+    const { targetAreaId, units } = req.body || {};
+
+    if (!targetAreaId || !units || Object.keys(units).length === 0) {
+        return res.status(400).json({ error: 'Missing targetAreaId or units' });
+    }
+
+    const originState = areaStates[areaId];
+    if (!originState) return res.status(404).json({ error: 'Origin area not found' });
+
+    // Verify ownership
+    let areaMeta = null;
+    for (const r of world.regions) {
+        const a = r.areas.find(x => x.id === areaId);
+        if (a) { areaMeta = a; break; }
+    }
+    if (!areaMeta || areaMeta.ownerId !== userId) return res.status(403).json({ error: 'Forbidden' });
+
+    // Verify units
+    for (const [uType, count] of Object.entries(units)) {
+        if ((originState.units[uType] || 0) < count) {
+            return res.status(400).json({ error: `Insufficient ${uType}` });
+        }
+    }
+
+    // Deduct units
+    for (const [uType, count] of Object.entries(units)) {
+        originState.units[uType] -= count;
+    }
+
+    // Travel time for expedition — computed from distance and unit speeds
+    const travelTicks = computeTravelTicks(areaId, targetAreaId, units);
+    
+    // Duration logic: User can specify duration in hours (default 1, max 24)
+    // "The longer they stay, the deeper they go."
+    let { duration } = req.body;
+    duration = Math.max(0.01, Math.min(24, Number(duration) || 1));
+    
+    // Food Provisioning: 10 Food per unit per hour
+    const totalUnits = Object.values(units).reduce((a, b) => a + b, 0);
+    const foodRequired = 10 * totalUnits * duration;
+    const foodAvailable = originState.resources[ResourceEnum.Food] || 0;
+    let foodConsumed = 0;
+    let provisionRatio = 1.0;
+
+    if (foodAvailable >= foodRequired) {
+        foodConsumed = foodRequired;
+        originState.resources[ResourceEnum.Food] -= foodRequired;
+    } else {
+        // Under-provisioned
+        foodConsumed = foodAvailable;
+        originState.resources[ResourceEnum.Food] = 0;
+        provisionRatio = foodAvailable / foodRequired;
+    }
+
+    // Total mission time: Travel there + Stay (duration) + Travel back
+    // We'll simplify by just adding them up. 1 hour = 3600 ticks (assuming 1s tick)
+    // If TICK_MS is 1000, then 3600 ticks = 1 hour.
+    const stayTicks = Math.ceil(duration * 3600); 
+    const totalMissionTicks = (travelTicks * 2) + stayTicks;
+
+    // Add mission
+    const missionId = `expedition_${Date.now()}`;
+    originState.missions = originState.missions || [];
+    originState.missions.push({
+        id: missionId,
+        type: 'Expedition',
+        originAreaId: areaId,
+        targetAreaId: targetAreaId,
+        units: units,
+        ticksRemaining: totalMissionTicks,
+        totalTicks: totalMissionTicks,
+        durationHours: duration,
+        provisionRatio: provisionRatio,
+        status: 'Traveling',
+        watchDirection: getWatchDirection(areaId, targetAreaId),
+        loot: {}
+    });
+
+    try { await saveGameState(); } catch (e) { /* ignore */ }
+    res.json({ success: true, missionId });
 });
 
 // Existing gamestate endpoint (for backward compatibility) - returns default demo area

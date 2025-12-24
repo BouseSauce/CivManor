@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { GameClient } from '../api/client';
+import { BUILDING_CONFIG } from '../../core/config/buildings.js';
+import { getIconForResource } from '../constants/iconMaps';
+import { ResourceEnum } from '../../core/constants/enums.js';
 import QueuePanel from './QueuePanel';
 
 export default function MyEmpire({ regions, user, onViewArea }) {
@@ -27,29 +30,32 @@ export default function MyEmpire({ regions, user, onViewArea }) {
   }, [regions, user]);
 
   return (
-    <div className="my-empire panel">
-      <div className="panel-header">My Empire</div>
+    <div className="my-empire medieval-panel">
+      <div className="panel-title">
+        <span>My Empire</span>
+        <i className="fa-solid fa-crown"></i>
+      </div>
       <div className="panel-body" style={{ padding: 12 }}>
         {/* Show TradeCart and cart contents for the current user */}
         {user && user.inventory && (
-          <div style={{ marginBottom: 12, padding: 8, background: 'rgba(255,255,255,0.02)', borderRadius: 2 }}>
-            <div style={{ fontSize: 12, color: '#ddd', fontWeight: 'bold' }}>Civilization Cart</div>
-            <div style={{ fontSize: 12, color: '#ccc', marginTop: 6 }}>Carts: {(user.inventory.units && (user.inventory.units.TradeCart || user.inventory.units.TradeCart === 0)) ? (user.inventory.units.TradeCart || 0) : 0}</div>
+          <div style={{ marginBottom: 12, padding: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--wood-light)', borderRadius: 2 }}>
+            <div style={{ fontSize: 14, color: 'var(--text-main)', fontWeight: 'bold', fontFamily: 'var(--font-header)' }}>Civilization Cart</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Carts: {(user.inventory.units && (user.inventory.units.TradeCart || user.inventory.units.TradeCart === 0)) ? (user.inventory.units.TradeCart || 0) : 0}</div>
             {user.inventory.cartContents && Object.keys(user.inventory.cartContents).length > 0 ? (
               <div style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 12, color: '#ddd' }}>Cart Contents:</div>
+                <div style={{ fontSize: 12, color: 'var(--text-main)' }}>Cart Contents:</div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
                   {Object.entries(user.inventory.cartContents).map(([k,v]) => (
-                    <div key={k} style={{ fontSize: 12, color: '#eee', background: 'rgba(0,0,0,0.25)', padding: '4px 6px', borderRadius: 3 }}>{v} {k}</div>
+                    <div key={k} style={{ fontSize: 12, color: 'var(--text-main)', background: 'var(--wood-dark)', padding: '4px 8px', borderRadius: 3 }}>{v} {k}</div>
                   ))}
                 </div>
               </div>
             ) : (
-              <div style={{ marginTop: 8, color: '#888', fontSize: 12 }}>No goods in cart.</div>
+              <div style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic' }}>No goods in cart.</div>
             )}
           </div>
         )}
-        {ownedMeta.length === 0 && <div>No owned areas yet.</div>}
+        {ownedMeta.length === 0 && <div style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No owned areas yet.</div>}
 
         {/* Empire-wide queue summary */}
         <div style={{ marginBottom: 12 }}>
@@ -72,15 +78,41 @@ export default function MyEmpire({ regions, user, onViewArea }) {
           />
 
           {ownedMeta.map(a => (
-            <div key={a.id} className="empire-tile panel" style={{ padding: 8, marginBottom: 8 }}>
-              <div style={{ fontWeight: 'bold' }}>{a.name} <span style={{ fontSize: 12, color: '#bbb' }}>({a.regionName})</span></div>
-              <div style={{ marginTop: 6 }}>ID: {a.id}</div>
+            <div key={a.id} className="empire-tile medieval-panel" style={{ padding: 12, marginBottom: 12, border: '2px solid var(--wood-dark)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontWeight: 'bold', fontFamily: 'var(--font-header)', fontSize: '1.1rem' }}>{a.name} <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 'normal' }}>({a.regionName})</span></div>
+                <button className="btn-medieval" onClick={() => onViewArea(a.id)} style={{ fontSize: '0.7rem', padding: '4px 10px' }}>Manage</button>
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>ID: {a.id}</div>
               {details[a.id] ? (
                 <div style={{ marginTop: 8 }}>
-                  <div style={{ fontSize: 12, color: '#ddd' }}>Owner: {details[a.id].ownerName || user.username}</div>
-                  <div style={{ fontSize: 12, color: '#ddd' }}>Pop: {details[a.id].stats?.currentPop} / {details[a.id].stats?.maxPop}</div>
-                  <div style={{ fontSize: 12, color: '#ddd' }}>Approval: {details[a.id].stats?.approval}%</div>
-                  <div style={{ fontSize: 12, color: '#ddd' }}>Timber: {Math.floor(details[a.id].resources?.Timber || 0).toLocaleString()}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-main)' }}>Pop: {details[a.id].stats?.currentPop} / {details[a.id].stats?.maxPop}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-main)' }}>Approval: {details[a.id].stats?.approval}%</div>
+                  {details[a.id].stats?.spyLevel > 0 && (
+                    <div style={{ fontSize: 12, color: '#67b0ff', fontWeight: 'bold' }}>Spy Level: {details[a.id].stats.spyLevel}</div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                    {['Timber','Stone','Food','Ore','Gold','Captives'].map(k => {
+                      const cur = Math.floor(details[a.id].resources?.[k] || 0).toLocaleString();
+                      // compute cap from Storehouse if available
+                      let cap = null;
+                      try {
+                        const storeCfg = BUILDING_CONFIG['Storehouse'];
+                        const storeLevel = (details[a.id].buildings || []).find(b => b.id === 'Storehouse')?.level || 0;
+                        if (storeCfg && storeCfg.storageBase && typeof storeCfg.storageBase[k] !== 'undefined') {
+                          const mul = storeCfg.storageMultiplier || 1.0;
+                          cap = Math.floor(storeCfg.storageBase[k] * Math.pow(mul, storeLevel));
+                        }
+                      } catch (e) { /* ignore */ }
+                      const iconData = getIconForResource(k) || { icon: 'fa-box', color: '#bbb' };
+                      return (
+                        <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.15)', padding: '4px 8px', borderRadius: 4 }}>
+                          <i className={`fa-solid ${iconData.icon}`} style={{ color: iconData.color }}></i>
+                          <div style={{ fontSize: 12, color: '#eee' }}>{cur}{cap ? ` / ${cap.toLocaleString()}` : ''} <span style={{ color: '#888', marginLeft: 6, fontSize: 11 }}>{k}</span></div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>Loading summary...</div>

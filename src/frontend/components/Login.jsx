@@ -57,7 +57,7 @@ export default function Login({ onAuth }) {
         </div>
         <div className="auth-actions">
           <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</button>
-          <div className="muted-note">or</div>
+          <div className="muted-note">OR</div>
           <button className="btn btn-ghost" type="button" onClick={async () => {
             setLoading(true);
             try {
@@ -87,14 +87,14 @@ export default function Login({ onAuth }) {
           }}>Create Test Account</button>
         </div>
         {savedAccounts && savedAccounts.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Saved Test Accounts</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ marginTop: 24, borderTop: '1px solid var(--wood-dark)', paddingTop: 16 }}>
+            <div style={{ fontSize: 11, color: 'var(--parchment-dark)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Saved Test Accounts</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {savedAccounts.map((a, i) => (
-                <div key={a.username + i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.02)', padding: 8, borderRadius: 6 }}>
-                  <div style={{ fontWeight: 700 }}>{a.username}</div>
+                <div key={a.username + i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.3)', padding: '10px 12px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--parchment)' }}>{a.username}</div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn" onClick={async () => {
+                      <button className="btn btn-ghost" style={{ padding: '4px 12px', fontSize: '0.8rem' }} onClick={async () => {
                         // Try to sign in using saved plaintext password if available, otherwise restore token
                         try {
                           if (a.password) {
@@ -127,13 +127,13 @@ export default function Login({ onAuth }) {
                           alert(err?.message || 'Failed to login with saved account');
                         }
                       }}>Use</button>
-                    <button className="btn btn-ghost" onClick={() => {
+                    <button className="btn" style={{ padding: '4px 8px', background: '#b71c1c', color: '#fff', border: 'none' }} onClick={() => {
                       try {
                         const next = savedAccounts.filter(s => !(s.username === a.username && s.id === a.id));
                         localStorage.setItem('gb_test_accounts', JSON.stringify(next));
                         setSavedAccounts(next);
                       } catch (e) { }
-                    }}>Remove</button>
+                    }}>×</button>
                   </div>
                 </div>
               ))}

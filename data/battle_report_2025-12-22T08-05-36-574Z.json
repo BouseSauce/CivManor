@@ -1,0 +1,96 @@
+{
+  "seed": 736573,
+  "rounds": 9,
+  "winner": "Defender",
+  "attacker": {
+    "start": 100,
+    "remaining": 0
+  },
+  "defender": {
+    "start": 100,
+    "remaining": 4
+  },
+  "log": [
+    {
+      "round": 1,
+      "attackerRemaining": 97,
+      "defenderRemaining": 98,
+      "losses": {
+        "attLost": 3,
+        "defLost": 2
+      }
+    },
+    {
+      "round": 2,
+      "attackerRemaining": 85,
+      "defenderRemaining": 82,
+      "losses": {
+        "attLost": 12,
+        "defLost": 16
+      }
+    },
+    {
+      "round": 3,
+      "attackerRemaining": 67,
+      "defenderRemaining": 66,
+      "losses": {
+        "attLost": 18,
+        "defLost": 16
+      }
+    },
+    {
+      "round": 4,
+      "attackerRemaining": 42,
+      "defenderRemaining": 43,
+      "losses": {
+        "attLost": 25,
+        "defLost": 23
+      }
+    },
+    {
+      "round": 5,
+      "attackerRemaining": 25,
+      "defenderRemaining": 27,
+      "losses": {
+        "attLost": 17,
+        "defLost": 16
+      }
+    },
+    {
+      "round": 6,
+      "attackerRemaining": 15,
+      "defenderRemaining": 16,
+      "losses": {
+        "attLost": 10,
+        "defLost": 11
+      }
+    },
+    {
+      "round": 7,
+      "attackerRemaining": 7,
+      "defenderRemaining": 10,
+      "losses": {
+        "attLost": 8,
+        "defLost": 6
+      }
+    },
+    {
+      "round": 8,
+      "attackerRemaining": 4,
+      "defenderRemaining": 7,
+      "losses": {
+        "attLost": 3,
+        "defLost": 3
+      }
+    },
+    {
+      "round": 9,
+      "attackerRemaining": 0,
+      "defenderRemaining": 4,
+      "losses": {
+        "attLost": 4,
+        "defLost": 3
+      }
+    }
+  ]
+}

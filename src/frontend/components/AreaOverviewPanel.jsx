@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { GameClient } from '../api/client';
 import { BUILDING_CONFIG } from '../../core/config/buildings.js';
+import { RESOURCE_ICON_MAP } from '../constants/iconMaps';
 
 /**
  * AreaOverviewPanel
  * Displays core stats (Pop, Approval, Food) and the active queue.
  */
-const AreaOverviewPanel = ({ areaId, areaName, coordinates, stats = {}, queue = [], units = [], assignments = {}, buildings = [], ownerName = null, compact = false, onRefresh = null }) => {
+const AreaOverviewPanel = ({ areaId, areaName, coordinates, stats = {}, resources = {}, queue = [], units = [], assignments = {}, buildings = [], ownerName = null, compact = false, onRefresh = null }) => {
     const [localAssignments, setLocalAssignments] = useState(assignments || {});
     const [assigning, setAssigning] = useState(false);
     const [secondsMap, setSecondsMap] = useState({});
 
     const [localUnits, setLocalUnits] = useState(units || []);
+    const [showDiagnostics, setShowDiagnostics] = useState(false);
 
     // Keep localUnits in sync when parent provides new units
     useEffect(() => {
@@ -19,7 +21,39 @@ const AreaOverviewPanel = ({ areaId, areaName, coordinates, stats = {}, queue = 
     }, [units]);
 
     const villagersCount = (localUnits && localUnits.find(u => u.type === 'Villager') || { count: 0 }).count;
-    const totalAssigned = Object.values(localAssignments).reduce((a,b) => a + b, 0);
+    const totalAssigned = Object.entries(localAssignments).reduce((acc, [k, v]) => {
+        return acc + (v || 0);
+    }, 0);
+
+    const reclaimAllWorkers = async () => {
+        if (!areaId) return;
+        if (!window.confirm('Are you sure you want to unassign ALL workers in this area? This will reset everyone to Idle.')) return;
+        
+        setAssigning(true);
+        try {
+            const keys = Object.keys(localAssignments);
+            // Process in sequence to avoid overwhelming the server, but catch individual errors
+            for (const key of keys) {
+                try {
+                    await GameClient.assignWorkers(areaId, key, 0);
+                } catch (e) {
+                    console.warn(`Failed to unassign key: ${key}`, e);
+                }
+            }
+            
+            // Force a refresh to get the clean state
+            if (typeof onRefresh === 'function') {
+                await onRefresh();
+            }
+            
+            alert('Workforce reclamation complete. All workers should now be idle.');
+        } catch (err) {
+            console.error('Reclaim process failed', err);
+            alert('Failed to complete the reclaim process. Please try again or refresh the page.');
+        } finally {
+            setAssigning(false);
+        }
+    };
 
     const changeAssignment = async (buildingId, delta) => {
         const current = localAssignments[buildingId] || 0;
@@ -99,117 +133,98 @@ const AreaOverviewPanel = ({ areaId, areaName, coordinates, stats = {}, queue = 
     }, []);
     
     return (
-        <div className='panel'>
-            {!compact && (
-                <div className='panel-header'>
-                    AREA OVERVIEW
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4, textTransform: 'none', fontWeight: 'normal' }}>
-                        {ownerName ? `Lord ${ownerName}` : ''}
-                    </div>
-                </div>
-            )}
-
-            {/* Core Stats Section - Responsive Grid */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-                gap: 16,
-                marginBottom: 16
-            }}>
-                <div className='stat-box' style={{ minWidth: 120, padding: 12 }}>
-                    <div className='stat-label'><i className='fa-solid fa-users'></i> POPULATION</div>
-                    <div className='stat-value' style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{stats.currentPop}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>/ {stats.maxPop}</div>
-                    </div>
-                </div>
-
-                <div className='stat-box' style={{ minWidth: 120, padding: 12 }}>
-                    <div className='stat-label'><i className='fa-solid fa-face-smile'></i> APPROVAL</div>
-                    <div className='stat-value' style={{ color: stats.approval >= 75 ? 'var(--accent-green)' : stats.approval < 25 ? 'var(--accent-red)' : '#fff', fontWeight: 700, fontSize: '1.25rem' }}>
-                        {stats.approval}%
-                    </div>
-                </div>
-
-                <div className='stat-box' style={{ minWidth: 120, padding: 12 }}>
-                    <div className='stat-label'><i className='fa-solid fa-wheat-awn'></i> FOOD SUPPLY</div>
-                    <div className='stat-value' style={{ color: (typeof stats.foodTotal === 'number' && stats.foodTotal > 0) ? 'var(--accent-green)' : 'var(--accent-red)', fontWeight: 700, fontSize: '1.25rem' }}>
-                        {typeof stats.foodTotal === 'number' ? Math.floor(stats.foodTotal).toLocaleString() : 'Unknown'}
-                    </div>
-                </div>
-                    <div className='stat-box' style={{ minWidth: 160, padding: 12 }}>
-                        <div className='stat-label'><i className='fa-solid fa-utensils'></i> FOOD CONSUMPTION</div>
-                        <div className='stat-value' style={{ fontWeight: 700, fontSize: '1rem' }}>
-                            {typeof stats.populationConsumptionPerHour === 'number' ? (
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                    <div style={{ color: 'var(--accent-red)' }}>{Math.floor(stats.populationConsumptionPerHour).toLocaleString()} food-value/hr</div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>~{Math.floor(stats.breadEquivalentPerHour || 0).toLocaleString()} bread/hr</div>
-                                </div>
-                            ) : (
-                                <div style={{ color: 'var(--text-muted)' }}>Unknown</div>
-                            )}
-                        </div>
-                    </div>
+        <div className="area-overview-panel" style={{ 
+            display: 'flex', 
+            gap: '16px', 
+            padding: '12px', 
+            background: 'var(--wood-medium)', 
+            borderBottom: '4px solid var(--wood-dark)',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            alignItems: 'center',
+            flexShrink: 0,
+            height: '80px' // Fixed height as requested
+        }}>
+            {/* Area Name */}
+            <div className="beveled-panel" style={{ minWidth: '200px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 16px' }}>
+                <div className="font-cinzel" style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>{areaName || 'Unknown Area'}</div>
+                <div className="font-garamond" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{coordinates || 'No Coords'}</div>
             </div>
 
-            {/* Worker Assignments */}
-            {!compact && (
-                <div style={{ marginBottom: 12 }}>
-                    <div style={{ marginBottom: 6, color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Villagers</div>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <div style={{ background: 'rgba(255,255,255,0.02)', padding: 10, borderRadius: 6, minWidth: 120 }}>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Villagers</div>
-                                <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{villagersCount}</div>
-                        </div>
-
-                        <div style={{ background: 'rgba(255,255,255,0.02)', padding: 10, borderRadius: 6, minWidth: 140 }}>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Assigned</div>
-                            <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{totalAssigned}</div>
-                            <div style={{ height: 8, background: 'rgba(255,255,255,0.04)', borderRadius: 6, marginTop: 8, overflow: 'hidden' }}>
-                                <div style={{ width: `${villagersCount ? Math.min(100, Math.round((totalAssigned / villagersCount) * 100)) : 0}%`, height: '100%', background: 'var(--accent-gold)' }} />
-                            </div>
-                        </div>
-
-                        {(['ForagersHut','HuntingLodge'].some(bid => findBuildingLevel(bid) > 0) && (
-                            <div style={{ display: 'flex', gap: 8, marginTop: 0, flexWrap: 'wrap' }}>
-                                {['ForagersHut','HuntingLodge'].map(bid => {
-                                    const lvl = findBuildingLevel(bid);
-                                    if (lvl < 1) return null;
-                                    const cur = localAssignments[bid] || 0;
-                                    const displayName = (BUILDING_CONFIG[bid] && BUILDING_CONFIG[bid].displayName) || bid;
-                                    // Determine capacity: use explicit workerCapacity if provided, otherwise default to 5 workers per level
-                                    const capacity = (BUILDING_CONFIG[bid] && BUILDING_CONFIG[bid].workerCapacity) ? BUILDING_CONFIG[bid].workerCapacity * lvl : Math.max(1, lvl * 5);
-                                    // Building state: Active if assigned > 0, Inactive if assigned == 0, Full if assigned >= capacity
-                                    let state = 'Inactive';
-                                    if (cur > 0 && cur < capacity) state = 'Active';
-                                    if (cur >= capacity) state = 'Full';
-
-                                    const stateColor = state === 'Active' ? 'var(--accent-green)' : state === 'Full' ? 'var(--accent-gold)' : 'var(--text-muted)';
-
-                                    return (
-                                        <div key={bid} style={{ background: 'rgba(255,255,255,0.02)', padding: 8, borderRadius: 6, minWidth: 160 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{displayName} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lvl {lvl}</span></div>
-                                                <div style={{ fontSize: '0.75rem', color: stateColor, fontWeight: 700, padding: '4px 8px', borderRadius: 12, background: 'rgba(0,0,0,0.02)' }}>{state}</div>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
-                                                <button className='btn' aria-label={`remove worker from ${displayName}`} disabled={assigning || lvl < 1} onClick={() => changeAssignment(bid, -1)}>-</button>
-                                                <div style={{ minWidth: 36, textAlign: 'center', fontWeight: 700 }}>{cur}</div>
-                                                <button className='btn btn-primary' aria-label={`add worker to ${displayName}`} disabled={assigning || totalAssigned >= villagersCount || lvl < 1 || cur >= capacity} onClick={() => changeAssignment(bid, 1)}>+</button>
-                                            </div>
-                                            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>Capacity: {capacity}</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ))}
-
-                        <div style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>{assigning ? 'Updating...' : ''}</div>
+            {/* Stats Dashboard */}
+            <div style={{ display: 'flex', gap: '12px', flex: 1, height: '100%' }}>
+                <div className="beveled-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '0 16px' }}>
+                    <i className="fa-solid fa-users" style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}></i>
+                    <div>
+                        <div className="font-cinzel" style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', letterSpacing: '1.5px', fontWeight: 700 }}>POPULATION</div>
+                        <div className="font-garamond" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>{stats.currentPop} <span style={{ fontSize: '0.9rem', opacity: 0.7 }}>/ {stats.maxPop}</span></div>
                     </div>
                 </div>
-            )}
 
-            {/* Active Projects removed per user request (aggregated queue now shown on My Empire) */}
+                <div className="beveled-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '0 16px' }}>
+                    <i className="fa-solid fa-face-smile" style={{ fontSize: '1.4rem', color: stats.approval >= 75 ? '#2e7d32' : stats.approval < 25 ? '#c62828' : 'var(--text-main)' }}></i>
+                    <div>
+                        <div className="font-cinzel" style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', letterSpacing: '1.5px', fontWeight: 700 }}>APPROVAL</div>
+                        <div className="font-garamond" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>{stats.approval}%</div>
+                    </div>
+                </div>
+
+                <div className="beveled-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '0 16px' }}>
+                    <i className="fa-solid fa-wheat-awn" style={{ fontSize: '1.4rem', color: '#f9a825' }}></i>
+                    <div>
+                        <div className="font-cinzel" style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', letterSpacing: '1.5px', fontWeight: 700 }}>FOOD</div>
+                        <div className="font-garamond" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>{typeof stats.foodTotal === 'number' ? Math.floor(stats.foodTotal).toLocaleString() : '0'}</div>
+                    </div>
+                </div>
+
+                {stats.spyLevel > 0 && (
+                    <div className="beveled-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '0 16px' }}>
+                        <i className="fa-solid fa-user-secret" style={{ fontSize: '1.4rem', color: '#67b0ff' }}></i>
+                        <div>
+                            <div className="font-cinzel" style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', letterSpacing: '1.5px', fontWeight: 700 }}>SPY LEVEL</div>
+                            <div className="font-garamond" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>{stats.spyLevel}</div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Resource Ticker (Simplified) */}
+            <div className="beveled-panel" style={{ display: 'flex', gap: '20px', overflowX: 'auto', maxWidth: '450px', alignItems: 'center', height: '100%', padding: '0 20px' }}>
+                {['Timber', 'Stone', 'Planks', 'Gold', 'IronIngot'].map(res => {
+                    // Robust lookup: check exact key, lowercase key, cartContents, and last-fetched area cache
+                    const lookup = (r) => {
+                        if (!r) return null;
+                        // direct
+                        if (resources && typeof resources[r] !== 'undefined') return resources[r];
+                        // lowercase
+                        const lower = r.toLowerCase();
+                        if (resources && typeof resources[lower] !== 'undefined') return resources[lower];
+                        // cartContents (some endpoints put resources in cartContents)
+                        if (resources && resources.cartContents && typeof resources.cartContents[r] !== 'undefined') return resources.cartContents[r];
+                        if (resources && resources.cartContents && typeof resources.cartContents[lower] !== 'undefined') return resources.cartContents[lower];
+                        // last fetched area global cache
+                        try {
+                            if (typeof window !== 'undefined' && window.__lastFetchedArea && areaId && window.__lastFetchedArea[areaId]) {
+                                const a = window.__lastFetchedArea[areaId];
+                                if (a.resources && typeof a.resources[r] !== 'undefined') return a.resources[r];
+                                if (a.resources && typeof a.resources[lower] !== 'undefined') return a.resources[lower];
+                                if (a.cartContents && typeof a.cartContents[r] !== 'undefined') return a.cartContents[r];
+                                if (a.cartContents && typeof a.cartContents[lower] !== 'undefined') return a.cartContents[lower];
+                            }
+                        } catch (e) {}
+                        return null;
+                    };
+
+                    const raw = lookup(res) ?? 0;
+                    const amount = (typeof raw === 'number' && isFinite(raw)) ? Math.floor(raw) : 0;
+                    const iconDef = RESOURCE_ICON_MAP[res] || { icon: 'fa-box', color: '#fff' };
+                    return (
+                        <div key={res} style={{ display: 'flex', alignItems: 'center', gap: '8px' }} title={`${res}: ${amount.toLocaleString()}`}>
+                            <i className={`fa-solid ${iconDef.icon}`} style={{ color: 'var(--text-main)', fontSize: '1rem' }}></i>
+                            <span className="font-garamond" style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-main)' }}>{amount.toLocaleString()}</span>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 };

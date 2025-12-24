@@ -101,6 +101,47 @@ export function simulateBattleRound(attackers, defenders) {
 }
 
 /**
+ * Resolves a full battle until one side is defeated or max rounds reached.
+ * 
+ * @param {Array} attackers 
+ * @param {Array} defenders 
+ * @param {number} maxRounds 
+ * @returns {Object} - { winner: 'attacker'|'defender'|'draw', attackers, defenders, log }
+ */
+export function resolveBattle(attackers, defenders, maxRounds = 50) {
+    let currentAttackers = [...attackers];
+    let currentDefenders = [...defenders];
+    const log = [];
+
+    for (let round = 1; round <= maxRounds; round++) {
+        if (currentAttackers.length === 0 || currentDefenders.length === 0) break;
+
+        const result = simulateBattleRound(currentAttackers, currentDefenders);
+        currentAttackers = result.attackers;
+        currentDefenders = result.defenders;
+
+        log.push({
+            round,
+            damageToAttackers: result.damageToAttackers,
+            damageToDefenders: result.damageToDefenders,
+            attackersLost: result.attackersLost.length,
+            defendersLost: result.defendersLost.length
+        });
+    }
+
+    let winner = 'draw';
+    if (currentAttackers.length > 0 && currentDefenders.length === 0) winner = 'attacker';
+    else if (currentDefenders.length > 0 && currentAttackers.length === 0) winner = 'defender';
+
+    return {
+        winner,
+        attackers: currentAttackers,
+        defenders: currentDefenders,
+        log
+    };
+}
+
+/**
  * Simulates the full battle (max 6 rounds).
  */
 export function simulateBattle(attackers, defenders) {

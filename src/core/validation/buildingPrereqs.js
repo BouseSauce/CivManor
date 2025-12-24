@@ -1,20 +1,31 @@
-import { BUILDING_PREREQS, BUILDING_CONFIG } from '../config/buildings.js';
+import { BUILDING_CONFIG } from '../config/buildings.js';
 
 /**
  * Evaluate prerequisites for a building given an AreaState and a user object.
  * Returns { allowed: boolean, missing: string[] }
  */
 export function evaluatePrereqs(state, user, buildingId) {
-    const prereq = BUILDING_PREREQS[buildingId];
-    // If no prereq entry, treat as locked
-    if (!prereq) return { allowed: false, missing: ['locked (no prereq entry)'] };
+    const cfg = BUILDING_CONFIG[buildingId];
+    if (!cfg) return { allowed: false, missing: ['locked (no building config)'] };
 
-    // If explicitly allowed at start, it's allowed
-    if (prereq.allowedAtStart) return { allowed: true, missing: [] };
+    // Build a normalized prereq object from BUILDING_CONFIG entry
+    const prereq = {};
+    if (!cfg.requirement) {
+        prereq.allowedAtStart = true;
+    } else {
+        const req = cfg.requirement || {};
+        // building level requirements
+        if (req.building) prereq.buildings = { [req.building]: (req.level || 1) };
+        if (req.buildings) prereq.buildings = Object.assign({}, req.buildings, prereq.buildings || {});
+        if (req.population) prereq.population = req.population;
+        if (req.items) prereq.items = req.items;
+        if (req.quest) prereq.quest = req.quest;
+        if (req.tech) prereq.tech = req.tech;
+    }
 
     const missing = [];
 
-    // Tech requirement
+    // Tech requirement (if present in config)
     if (prereq.tech) {
         const need = Array.isArray(prereq.tech) ? prereq.tech : [prereq.tech];
         const have = (user && user.researchedTechs) || [];

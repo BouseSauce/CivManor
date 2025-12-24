@@ -1,0 +1,752 @@
+{
+  "meta": {
+    "generatedAt": "2025-12-17T07:06:20.921Z",
+    "source": "generate_regions.js"
+  },
+  "regions": [
+    {
+      "id": "R1",
+      "name": "Region 1 — Oak Field",
+      "areas": [
+        "R1:A1",
+        "R1:A2",
+        "R1:A3",
+        "R1:A4",
+        "R1:A5",
+        "R1:A6",
+        "R1:A7",
+        "R1:A8",
+        "R1:A9",
+        "R1:A10",
+        "R1:A11",
+        "R1:A12",
+        "R1:A13"
+      ]
+    },
+    {
+      "id": "R2",
+      "name": "Region 2 — Golden Ford",
+      "areas": [
+        "R2:A1",
+        "R2:A2",
+        "R2:A3",
+        "R2:A4",
+        "R2:A5",
+        "R2:A6",
+        "R2:A7",
+        "R2:A8",
+        "R2:A9",
+        "R2:A10",
+        "R2:A11",
+        "R2:A12",
+        "R2:A13"
+      ]
+    },
+    {
+      "id": "R3",
+      "name": "Region 3 — Silver Wood Keep",
+      "areas": [
+        "R3:A1",
+        "R3:A2",
+        "R3:A3",
+        "R3:A4",
+        "R3:A5",
+        "R3:A6",
+        "R3:A7",
+        "R3:A8",
+        "R3:A9",
+        "R3:A10",
+        "R3:A11",
+        "R3:A12",
+        "R3:A13",
+        "R3:A14",
+        "R3:A15"
+      ]
+    },
+    {
+      "id": "R4",
+      "name": "Region 4 — Blue Hill",
+      "areas": [
+        "R4:A1",
+        "R4:A2",
+        "R4:A3",
+        "R4:A4",
+        "R4:A5",
+        "R4:A6",
+        "R4:A7",
+        "R4:A8",
+        "R4:A9",
+        "R4:A10",
+        "R4:A11",
+        "R4:A12"
+      ]
+    },
+    {
+      "id": "R5",
+      "name": "Region 5 — Green Heights",
+      "areas": [
+        "R5:A1",
+        "R5:A2",
+        "R5:A3",
+        "R5:A4",
+        "R5:A5",
+        "R5:A6",
+        "R5:A7",
+        "R5:A8",
+        "R5:A9",
+        "R5:A10",
+        "R5:A11",
+        "R5:A12",
+        "R5:A13"
+      ]
+    },
+    {
+      "id": "R6",
+      "name": "Region 6 — Birch Vale Hold",
+      "areas": [
+        "R6:A1",
+        "R6:A2",
+        "R6:A3",
+        "R6:A4",
+        "R6:A5",
+        "R6:A6",
+        "R6:A7",
+        "R6:A8",
+        "R6:A9",
+        "R6:A10",
+        "R6:A11",
+        "R6:A12",
+        "R6:A13",
+        "R6:A14"
+      ]
+    },
+    {
+      "id": "R7",
+      "name": "Region 7 — River Ford",
+      "areas": [
+        "R7:A1",
+        "R7:A2",
+        "R7:A3",
+        "R7:A4",
+        "R7:A5",
+        "R7:A6",
+        "R7:A7",
+        "R7:A8",
+        "R7:A9",
+        "R7:A10",
+        "R7:A11",
+        "R7:A12",
+        "R7:A13",
+        "R7:A14"
+      ]
+    },
+    {
+      "id": "R8",
+      "name": "Region 8 — Red Ford Keep",
+      "areas": [
+        "R8:A1",
+        "R8:A2",
+        "R8:A3",
+        "R8:A4",
+        "R8:A5",
+        "R8:A6",
+        "R8:A7",
+        "R8:A8",
+        "R8:A9",
+        "R8:A10",
+        "R8:A11",
+        "R8:A12",
+        "R8:A13",
+        "R8:A14"
+      ]
+    },
+    {
+      "id": "R9",
+      "name": "Region 9 — Blue Heath Keep",
+      "areas": [
+        "R9:A1",
+        "R9:A2",
+        "R9:A3",
+        "R9:A4",
+        "R9:A5",
+        "R9:A6",
+        "R9:A7",
+        "R9:A8",
+        "R9:A9",
+        "R9:A10",
+        "R9:A11",
+        "R9:A12",
+        "R9:A13",
+        "R9:A14"
+      ]
+    },
+    {
+      "id": "R10",
+      "name": "Region 10 — Silver Field",
+      "areas": [
+        "R10:A1",
+        "R10:A2",
+        "R10:A3",
+        "R10:A4",
+        "R10:A5",
+        "R10:A6",
+        "R10:A7",
+        "R10:A8",
+        "R10:A9",
+        "R10:A10",
+        "R10:A11",
+        "R10:A12",
+        "R10:A13",
+        "R10:A14"
+      ]
+    }
+  ],
+  "areaStates": {
+    "R1:A1": {
+      "id": "R1:A1",
+      "name": "Oak Field"
+    },
+    "R1:A2": {
+      "id": "R1:A2",
+      "name": "Birch Cliff Keep"
+    },
+    "R1:A3": {
+      "id": "R1:A3",
+      "name": "Wind Ford"
+    },
+    "R1:A4": {
+      "id": "R1:A4",
+      "name": "Sun Wood"
+    },
+    "R1:A5": {
+      "id": "R1:A5",
+      "name": "Moon Harbor"
+    },
+    "R1:A6": {
+      "id": "R1:A6",
+      "name": "Oak Vale"
+    },
+    "R1:A7": {
+      "id": "R1:A7",
+      "name": "Blue Cliff"
+    },
+    "R1:A8": {
+      "id": "R1:A8",
+      "name": "Storm Hollow"
+    },
+    "R1:A9": {
+      "id": "R1:A9",
+      "name": "Silver Cliff"
+    },
+    "R1:A10": {
+      "id": "R1:A10",
+      "name": "White Wood"
+    },
+    "R1:A11": {
+      "id": "R1:A11",
+      "name": "Oak Ridge"
+    },
+    "R1:A12": {
+      "id": "R1:A12",
+      "name": "Moon Cliff Keep"
+    },
+    "R1:A13": {
+      "id": "R1:A13",
+      "name": "Storm Wood"
+    },
+    "R2:A1": {
+      "id": "R2:A1",
+      "name": "Golden Ford"
+    },
+    "R2:A2": {
+      "id": "R2:A2",
+      "name": "Shadow Watch"
+    },
+    "R2:A3": {
+      "id": "R2:A3",
+      "name": "Crystal Forge"
+    },
+    "R2:A4": {
+      "id": "R2:A4",
+      "name": "Silver Hollow Hold"
+    },
+    "R2:A5": {
+      "id": "R2:A5",
+      "name": "Storm Hill Keep"
+    },
+    "R2:A6": {
+      "id": "R2:A6",
+      "name": "Iron Brook"
+    },
+    "R2:A7": {
+      "id": "R2:A7",
+      "name": "Bright Harbor"
+    },
+    "R2:A8": {
+      "id": "R2:A8",
+      "name": "Iron Gate"
+    },
+    "R2:A9": {
+      "id": "R2:A9",
+      "name": "Storm Ridge"
+    },
+    "R2:A10": {
+      "id": "R2:A10",
+      "name": "Storm Vale Village"
+    },
+    "R2:A11": {
+      "id": "R2:A11",
+      "name": "Wind Field Point"
+    },
+    "R2:A12": {
+      "id": "R2:A12",
+      "name": "Shadow Heights"
+    },
+    "R2:A13": {
+      "id": "R2:A13",
+      "name": "Red Forge Market"
+    },
+    "R3:A1": {
+      "id": "R3:A1",
+      "name": "Silver Wood Keep"
+    },
+    "R3:A2": {
+      "id": "R3:A2",
+      "name": "Oak Hill"
+    },
+    "R3:A3": {
+      "id": "R3:A3",
+      "name": "Crystal Hill Rest"
+    },
+    "R3:A4": {
+      "id": "R3:A4",
+      "name": "Bright Hold Keep"
+    },
+    "R3:A5": {
+      "id": "R3:A5",
+      "name": "Golden Vale"
+    },
+    "R3:A6": {
+      "id": "R3:A6",
+      "name": "Star Hollow Keep"
+    },
+    "R3:A7": {
+      "id": "R3:A7",
+      "name": "Star Cross Rest"
+    },
+    "R3:A8": {
+      "id": "R3:A8",
+      "name": "Bright Cross"
+    },
+    "R3:A9": {
+      "id": "R3:A9",
+      "name": "River Forge"
+    },
+    "R3:A10": {
+      "id": "R3:A10",
+      "name": "Crystal Pass"
+    },
+    "R3:A11": {
+      "id": "R3:A11",
+      "name": "Bright Brook"
+    },
+    "R3:A12": {
+      "id": "R3:A12",
+      "name": "Iron Brook Market"
+    },
+    "R3:A13": {
+      "id": "R3:A13",
+      "name": "Moon Hold"
+    },
+    "R3:A14": {
+      "id": "R3:A14",
+      "name": "Moon Hold"
+    },
+    "R3:A15": {
+      "id": "R3:A15",
+      "name": "Red Field"
+    },
+    "R4:A1": {
+      "id": "R4:A1",
+      "name": "Blue Hill"
+    },
+    "R4:A2": {
+      "id": "R4:A2",
+      "name": "Moon Cross Hold"
+    },
+    "R4:A3": {
+      "id": "R4:A3",
+      "name": "Oak Hollow"
+    },
+    "R4:A4": {
+      "id": "R4:A4",
+      "name": "Iron Wood"
+    },
+    "R4:A5": {
+      "id": "R4:A5",
+      "name": "Red Cross"
+    },
+    "R4:A6": {
+      "id": "R4:A6",
+      "name": "Crystal Brook"
+    },
+    "R4:A7": {
+      "id": "R4:A7",
+      "name": "White Forge"
+    },
+    "R4:A8": {
+      "id": "R4:A8",
+      "name": "Golden Pass"
+    },
+    "R4:A9": {
+      "id": "R4:A9",
+      "name": "Storm Vale"
+    },
+    "R4:A10": {
+      "id": "R4:A10",
+      "name": "Stone Wood"
+    },
+    "R4:A11": {
+      "id": "R4:A11",
+      "name": "Moon Cliff"
+    },
+    "R4:A12": {
+      "id": "R4:A12",
+      "name": "Green Gate Hold"
+    },
+    "R5:A1": {
+      "id": "R5:A1",
+      "name": "Green Heights"
+    },
+    "R5:A2": {
+      "id": "R5:A2",
+      "name": "Green Ford"
+    },
+    "R5:A3": {
+      "id": "R5:A3",
+      "name": "White Cross"
+    },
+    "R5:A4": {
+      "id": "R5:A4",
+      "name": "Bright Glen"
+    },
+    "R5:A5": {
+      "id": "R5:A5",
+      "name": "Shadow Cliff"
+    },
+    "R5:A6": {
+      "id": "R5:A6",
+      "name": "Red Wood"
+    },
+    "R5:A7": {
+      "id": "R5:A7",
+      "name": "Red Glen"
+    },
+    "R5:A8": {
+      "id": "R5:A8",
+      "name": "River Hold Village"
+    },
+    "R5:A9": {
+      "id": "R5:A9",
+      "name": "Iron Vale"
+    },
+    "R5:A10": {
+      "id": "R5:A10",
+      "name": "Shadow Cliff"
+    },
+    "R5:A11": {
+      "id": "R5:A11",
+      "name": "Silver Harbor"
+    },
+    "R5:A12": {
+      "id": "R5:A12",
+      "name": "Red Ridge"
+    },
+    "R5:A13": {
+      "id": "R5:A13",
+      "name": "Red Gate"
+    },
+    "R6:A1": {
+      "id": "R6:A1",
+      "name": "Birch Vale Hold"
+    },
+    "R6:A2": {
+      "id": "R6:A2",
+      "name": "Birch Hill"
+    },
+    "R6:A3": {
+      "id": "R6:A3",
+      "name": "Birch Vale"
+    },
+    "R6:A4": {
+      "id": "R6:A4",
+      "name": "Shadow Wood"
+    },
+    "R6:A5": {
+      "id": "R6:A5",
+      "name": "Iron Heights"
+    },
+    "R6:A6": {
+      "id": "R6:A6",
+      "name": "Storm Heights"
+    },
+    "R6:A7": {
+      "id": "R6:A7",
+      "name": "Moon Pass"
+    },
+    "R6:A8": {
+      "id": "R6:A8",
+      "name": "Iron Heath"
+    },
+    "R6:A9": {
+      "id": "R6:A9",
+      "name": "Wind Cliff"
+    },
+    "R6:A10": {
+      "id": "R6:A10",
+      "name": "Bright Hollow"
+    },
+    "R6:A11": {
+      "id": "R6:A11",
+      "name": "Golden Gate Rest"
+    },
+    "R6:A12": {
+      "id": "R6:A12",
+      "name": "Moon Brook"
+    },
+    "R6:A13": {
+      "id": "R6:A13",
+      "name": "Red Vale Market"
+    },
+    "R6:A14": {
+      "id": "R6:A14",
+      "name": "Oak Brook Landing"
+    },
+    "R7:A1": {
+      "id": "R7:A1",
+      "name": "River Ford"
+    },
+    "R7:A2": {
+      "id": "R7:A2",
+      "name": "Sun Cliff"
+    },
+    "R7:A3": {
+      "id": "R7:A3",
+      "name": "Red Brook"
+    },
+    "R7:A4": {
+      "id": "R7:A4",
+      "name": "Birch Field"
+    },
+    "R7:A5": {
+      "id": "R7:A5",
+      "name": "River Harbor"
+    },
+    "R7:A6": {
+      "id": "R7:A6",
+      "name": "Iron Field"
+    },
+    "R7:A7": {
+      "id": "R7:A7",
+      "name": "Storm Heath"
+    },
+    "R7:A8": {
+      "id": "R7:A8",
+      "name": "Shadow Cliff Hold"
+    },
+    "R7:A9": {
+      "id": "R7:A9",
+      "name": "Stone Moor Landing"
+    },
+    "R7:A10": {
+      "id": "R7:A10",
+      "name": "Raven Hill"
+    },
+    "R7:A11": {
+      "id": "R7:A11",
+      "name": "Moon Wood"
+    },
+    "R7:A12": {
+      "id": "R7:A12",
+      "name": "Stone Pass"
+    },
+    "R7:A13": {
+      "id": "R7:A13",
+      "name": "Crystal Glen"
+    },
+    "R7:A14": {
+      "id": "R7:A14",
+      "name": "Blue Harbor Landing"
+    },
+    "R8:A1": {
+      "id": "R8:A1",
+      "name": "Red Ford Keep"
+    },
+    "R8:A2": {
+      "id": "R8:A2",
+      "name": "Star Forge"
+    },
+    "R8:A3": {
+      "id": "R8:A3",
+      "name": "Green Pass"
+    },
+    "R8:A4": {
+      "id": "R8:A4",
+      "name": "Storm Glen"
+    },
+    "R8:A5": {
+      "id": "R8:A5",
+      "name": "Oak Ridge"
+    },
+    "R8:A6": {
+      "id": "R8:A6",
+      "name": "White Moor Town"
+    },
+    "R8:A7": {
+      "id": "R8:A7",
+      "name": "Blue Forge Port"
+    },
+    "R8:A8": {
+      "id": "R8:A8",
+      "name": "Silver Forge Hold"
+    },
+    "R8:A9": {
+      "id": "R8:A9",
+      "name": "Iron Pass"
+    },
+    "R8:A10": {
+      "id": "R8:A10",
+      "name": "Bright Watch"
+    },
+    "R8:A11": {
+      "id": "R8:A11",
+      "name": "Crystal Glen"
+    },
+    "R8:A12": {
+      "id": "R8:A12",
+      "name": "Blue Brook"
+    },
+    "R8:A13": {
+      "id": "R8:A13",
+      "name": "Oak Vale"
+    },
+    "R8:A14": {
+      "id": "R8:A14",
+      "name": "Iron Heights Town"
+    },
+    "R9:A1": {
+      "id": "R9:A1",
+      "name": "Blue Heath Keep"
+    },
+    "R9:A2": {
+      "id": "R9:A2",
+      "name": "Bright Glen Port"
+    },
+    "R9:A3": {
+      "id": "R9:A3",
+      "name": "Wind Gate"
+    },
+    "R9:A4": {
+      "id": "R9:A4",
+      "name": "Oak Heights Port"
+    },
+    "R9:A5": {
+      "id": "R9:A5",
+      "name": "Iron Ford"
+    },
+    "R9:A6": {
+      "id": "R9:A6",
+      "name": "Blue Forge"
+    },
+    "R9:A7": {
+      "id": "R9:A7",
+      "name": "Oak Wood Town"
+    },
+    "R9:A8": {
+      "id": "R9:A8",
+      "name": "River Heath"
+    },
+    "R9:A9": {
+      "id": "R9:A9",
+      "name": "River Moor"
+    },
+    "R9:A10": {
+      "id": "R9:A10",
+      "name": "Shadow Ford"
+    },
+    "R9:A11": {
+      "id": "R9:A11",
+      "name": "River Moor Hold"
+    },
+    "R9:A12": {
+      "id": "R9:A12",
+      "name": "Bright Hold"
+    },
+    "R9:A13": {
+      "id": "R9:A13",
+      "name": "Stone Ridge Port"
+    },
+    "R9:A14": {
+      "id": "R9:A14",
+      "name": "Storm Hollow"
+    },
+    "R10:A1": {
+      "id": "R10:A1",
+      "name": "Silver Field"
+    },
+    "R10:A2": {
+      "id": "R10:A2",
+      "name": "Sun Cliff Town"
+    },
+    "R10:A3": {
+      "id": "R10:A3",
+      "name": "Sun Field"
+    },
+    "R10:A4": {
+      "id": "R10:A4",
+      "name": "Wind Brook"
+    },
+    "R10:A5": {
+      "id": "R10:A5",
+      "name": "White Wood"
+    },
+    "R10:A6": {
+      "id": "R10:A6",
+      "name": "Raven Gate Hold"
+    },
+    "R10:A7": {
+      "id": "R10:A7",
+      "name": "Birch Brook"
+    },
+    "R10:A8": {
+      "id": "R10:A8",
+      "name": "Green Heights"
+    },
+    "R10:A9": {
+      "id": "R10:A9",
+      "name": "Blue Hollow"
+    },
+    "R10:A10": {
+      "id": "R10:A10",
+      "name": "Golden Cliff"
+    },
+    "R10:A11": {
+      "id": "R10:A11",
+      "name": "Raven Heath"
+    },
+    "R10:A12": {
+      "id": "R10:A12",
+      "name": "White Hold"
+    },
+    "R10:A13": {
+      "id": "R10:A13",
+      "name": "Crystal Glen"
+    },
+    "R10:A14": {
+      "id": "R10:A14",
+      "name": "Red Harbor"
+    }
+  },
+  "areaOwners": {},
+  "users": {}
+}

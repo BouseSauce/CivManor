@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign - Medieval Strategy Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --wood-dark: #3e2723;
+            --wood-medium: #5d4037;
+            --wood-light: #8d6e63;
+            --parchment: #d7ccc8;
+            --parchment-dark: #a1887f;
+            --iron: #455a64;
+            --ember: #ff6f00;
+            --text-dark: #2b1d19;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #1a1a1a;
+            background-image: url('https://www.transparenttextures.com/patterns/dark-wood.png');
+            color: var(--text-dark);
+            font-family: 'Lato', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        h1, h2, h3, .panel-title {
+            font-family: 'MedievalSharp', serif;
+        }
+
+        /* Top Bar (Resource Ribbon) */
+        .top-bar {
+            height: 60px;
+            background: linear-gradient(to bottom, #5d4037, #3e2723);
+            border-bottom: 4px solid #2b1d19;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 20px;
+            z-index: 100;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        .resource-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 100px;
+        }
+
+        .resource-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--parchment);
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .resource-info i {
+            color: var(--ember);
+            width: 16px;
+            text-align: center;
+        }
+
+        .capacity-bar {
+            height: 6px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .capacity-fill {
+            height: 100%;
+            background: linear-gradient(to right, #8d6e63, var(--parchment));
+            width: 60%;
+        }
+
+        /* Layout Container */
+        .app-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Left Sidebar */
+        .sidebar {
+            width: 80px;
+            background: linear-gradient(to right, #3e2723, #2b1d19);
+            border-right: 4px solid #1a110e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            gap: 25px;
+        }
+
+        .nav-icon {
+            width: 50px;
+            height: 50px;
+            background: var(--wood-medium);
+            border: 2px solid var(--wood-dark);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--parchment);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5), 2px 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .nav-icon:hover, .nav-icon.active {
+            background: var(--ember);
+            color: #fff;
+            box-shadow: 0 0 15px var(--ember);
+            transform: scale(1.05);
+        }
+
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            padding: 20px;
+            gap: 20px;
+            overflow: hidden;
+        }
+
+        /* Medieval Panel Style */
+        .medieval-panel {
+            background-color: var(--parchment);
+            background-image: url('https://www.transparenttextures.com/patterns/papyrus.png');
+            border: 8px solid #3e2723;
+            border-image: linear-gradient(to bottom, #5d4037, #2b1d19) 1;
+            box-shadow: 
+                inset 0 0 15px rgba(0,0,0,0.5), 
+                5px 5px 15px rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 4px;
+            position: relative;
+            color: var(--text-dark);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-shadow: 1px 1px 0px rgba(255,255,255,0.3);
+            border-bottom: 2px solid var(--parchment-dark);
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Left Column (World Browser) */
+        .world-browser {
+            flex: 0 0 60%;
+        }
+
+        .hex-grid {
+            flex: 1;
+            background: rgba(0,0,0,0.1);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            background-image: radial-gradient(circle, rgba(0,0,0,0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+        }
+
+        .hex-map-placeholder {
+            width: 80%;
+            height: 80%;
+            border: 2px dashed var(--parchment-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--parchment-dark);
+            font-style: italic;
+        }
+
+        /* Right Column (Civilization/Building) */
+        .civ-panel {
+            flex: 0 0 40%;
+        }
+
+        .scroll-content {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .scroll-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .scroll-content::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+        }
+        .scroll-content::-webkit-scrollbar-thumb {
+            background: var(--wood-medium);
+            border-radius: 4px;
+        }
+
+        .building-card {
+            background: rgba(0,0,0,0.05);
+            border: 1px solid var(--parchment-dark);
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 2px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .building-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--wood-dark);
+            border: 2px solid var(--parchment-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--parchment);
+            font-size: 1.5rem;
+        }
+
+        .building-info {
+            flex: 1;
+        }
+
+        .building-name {
+            font-weight: bold;
+            font-family: 'MedievalSharp', serif;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+        }
+
+        .building-stats {
+            font-size: 0.85rem;
+            color: #5d4037;
+        }
+
+        .queue-section {
+            margin-top: 20px;
+            border-top: 2px solid var(--parchment-dark);
+            padding-top: 15px;
+        }
+
+        .queue-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            padding: 8px;
+            background: rgba(255,255,255,0.3);
+            margin-bottom: 5px;
+            border-left: 4px solid var(--ember);
+        }
+
+        /* Buttons */
+        .btn-medieval {
+            background: linear-gradient(145deg, #5d4037, #3e2723);
+            color: #d7ccc8;
+            border: 1px solid #2b1d19;
+            padding: 8px 16px;
+            cursor: pointer;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.4);
+            transition: all 0.3s ease;
+            font-family: 'MedievalSharp', serif;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            margin-top: 10px;
+        }
+
+        .btn-medieval:hover {
+            color: #fff;
+            box-shadow: 0 0 10px var(--ember);
+            text-shadow: 0 0 5px var(--ember);
+        }
+
+        /* Modal / Inbox */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            width: 500px;
+            max-height: 80vh;
+        }
+
+        .message-item {
+            padding: 15px;
+            border-bottom: 1px solid var(--parchment-dark);
+            display: flex;
+            gap: 15px;
+            cursor: pointer;
+        }
+
+        .message-item:hover {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .wax-seal {
+            width: 30px;
+            height: 30px;
+            background: #b71c1c;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 0.8rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .wax-seal::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+        }
+
+        .view-container {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .view-container.active {
+            display: flex;
+            gap: 20px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="resource-item">
+            <div class="resource-info"><i class="fa-solid fa-wheat-awn"></i> Food: 1,240</div>
+            <div class="capacity-bar"><div class="capacity-fill" style="width: 45%;"></div></div>
+        </div>
+        <div class="resource-item">
+            <div class="resource-info"><i class="fa-solid fa-tree"></i> Timber: 850</div>
+            <div class="capacity-bar"><div class="capacity-fill" style="width: 70%;"></div></div>
+        </div>
+        <div class="resource-item">
+            <div class="resource-info"><i class="fa-solid fa-mountain"></i> Ore: 420</div>
+            <div class="capacity-bar"><div class="capacity-fill" style="width: 30%;"></div></div>
+        </div>
+        <div class="resource-item">
+            <div class="resource-info"><i class="fa-solid fa-cubes"></i> Stone: 2,100</div>
+            <div class="capacity-bar"><div class="capacity-fill" style="width: 90%;"></div></div>
+        </div>
+        <div class="resource-item">
+            <div class="resource-info"><i class="fa-solid fa-coins"></i> Gold: 15,400</div>
+            <div class="capacity-bar"><div class="capacity-fill" style="width: 20%;"></div></div>
+        </div>
+        <div class="resource-item" style="margin-left: auto;">
+            <div class="resource-info"><i class="fa-solid fa-users"></i> Pop: 142 / 200</div>
+            <div class="capacity-bar"><div class="capacity-fill" style="width: 71%; background: var(--ember);"></div></div>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="nav-icon active" onclick="switchView('dashboard')" title="Dashboard"><i class="fa-solid fa-gauge-high"></i></div>
+            <div class="nav-icon" onclick="switchView('empire')" title="Empire"><i class="fa-solid fa-crown"></i></div>
+            <div class="nav-icon" onclick="openInbox()" title="Messages"><i class="fa-solid fa-envelope"></i></div>
+            <div class="nav-icon" onclick="switchView('world')" title="World Map"><i class="fa-solid fa-map"></i></div>
+            <div class="nav-icon" style="margin-top: auto; margin-bottom: 20px;" title="Settings"><i class="fa-solid fa-gear"></i></div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            
+            <!-- Dashboard View -->
+            <div id="dashboard-view" class="view-container active">
+                <div class="medieval-panel world-browser">
+                    <div class="panel-title">
+                        <span>World Browser - Region: Iron Valley</span>
+                        <span style="font-size: 0.8rem; color: var(--wood-medium);">X: 142 | Y: 88</span>
+                    </div>
+                    <div class="hex-grid">
+                        <div class="hex-map-placeholder">
+                            <i class="fa-solid fa-map-location-dot" style="font-size: 4rem; margin-bottom: 20px; display: block;"></i>
+                            Hexagonal Region Map Rendering...
+                        </div>
+                    </div>
+                </div>
+
+                <div class="medieval-panel civ-panel">
+                    <div class="panel-title">
+                        <span>Civilization: Iron Forge</span>
+                        <i class="fa-solid fa-city"></i>
+                    </div>
+                    
+                    <div class="scroll-content">
+                        <div class="building-card">
+                            <div class="building-icon"><i class="fa-solid fa-house-chimney"></i></div>
+                            <div class="building-info">
+                                <div class="building-name">Town Hall (Level 8)</div>
+                                <div class="building-stats">Next Level: +5 Pop Capacity</div>
+                                <button class="btn-medieval">Upgrade (400 Timber)</button>
+                            </div>
+                        </div>
+
+                        <div class="building-card">
+                            <div class="building-icon"><i class="fa-solid fa-wheat-awn"></i></div>
+                            <div class="building-info">
+                                <div class="building-name">Farmhouse (Level 12)</div>
+                                <div class="building-stats">Production: 120 Food/hr</div>
+                                <button class="btn-medieval">Upgrade (250 Stone)</button>
+                            </div>
+                        </div>
+
+                        <div class="building-card">
+                            <div class="building-icon"><i class="fa-solid fa-hammer"></i></div>
+                            <div class="building-info">
+                                <div class="building-name">Smithy (Level 4)</div>
+                                <div class="building-stats">Unlocks: Iron Tools</div>
+                                <button class="btn-medieval">Upgrade (600 Ore)</button>
+                            </div>
+                        </div>
+
+                        <div class="queue-section">
+                            <div class="panel-title" style="font-size: 0.9rem; border-bottom: 1px solid var(--parchment-dark);">Construction Queue</div>
+                            <div class="queue-item">
+                                <span>Logging Camp (Lvl 10)</span>
+                                <span style="color: var(--wood-medium);">04:22</span>
+                            </div>
+                            <div class="queue-item">
+                                <span>Stone Quarry (Lvl 9)</span>
+                                <span style="color: var(--wood-medium);">Waiting...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empire View (Placeholder) -->
+            <div id="empire-view" class="view-container">
+                <div class="medieval-panel" style="flex: 1;">
+                    <div class="panel-title">Empire Overview</div>
+                    <p>Manage your multiple settlements and trade routes here.</p>
+                </div>
+            </div>
+
+            <!-- World View (Placeholder) -->
+            <div id="world-view" class="view-container">
+                <div class="medieval-panel" style="flex: 1;">
+                    <div class="panel-title">Global Map</div>
+                    <p>Explore the vast world and discover new regions.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Inbox Modal -->
+    <div id="inbox-modal" class="modal-overlay" onclick="closeInbox(event)">
+        <div class="medieval-panel modal-content" onclick="event.stopPropagation()">
+            <div class="panel-title">
+                <span>Royal Messenger</span>
+                <i class="fa-solid fa-xmark" style="cursor: pointer;" onclick="document.getElementById('inbox-modal').style.display='none'"></i>
+            </div>
+            <div class="scroll-content" style="max-height: 400px;">
+                <div class="message-item">
+                    <div class="wax-seal"><i class="fa-solid fa-scroll"></i></div>
+                    <div>
+                        <div style="font-weight: bold;">Scout Report: Northern Hills</div>
+                        <div style="font-size: 0.8rem; color: #5d4037;">New resource deposits discovered...</div>
+                    </div>
+                </div>
+                <div class="message-item">
+                    <div class="wax-seal" style="background: #455a64;"><i class="fa-solid fa-check"></i></div>
+                    <div>
+                        <div style="font-weight: bold;">Trade Agreement Accepted</div>
+                        <div style="font-size: 0.8rem; color: #5d4037;">Lord Cedric has agreed to the timber trade...</div>
+                    </div>
+                </div>
+                <div class="message-item">
+                    <div class="wax-seal"><i class="fa-solid fa-scroll"></i></div>
+                    <div>
+                        <div style="font-weight: bold;">Warning: Bandit Activity</div>
+                        <div style="font-size: 0.8rem; color: #5d4037;">Reports of raids near the southern border...</div>
+                    </div>
+                </div>
+            </div>
+            <button class="btn-medieval" style="width: 100%;" onclick="document.getElementById('inbox-modal').style.display='none'">Close Inbox</button>
+        </div>
+    </div>
+
+    <script>
+        function switchView(viewName) {
+            // Update icons
+            document.querySelectorAll('.nav-icon').forEach(icon => {
+                icon.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+
+            // Update views
+            document.querySelectorAll('.view-container').forEach(view => {
+                view.classList.remove('active');
+            });
+            document.getElementById(viewName + '-view').classList.add('active');
+        }
+
+        function openInbox() {
+            document.getElementById('inbox-modal').style.display = 'flex';
+        }
+
+        function closeInbox(event) {
+            document.getElementById('inbox-modal').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

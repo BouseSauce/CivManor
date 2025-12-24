@@ -33,6 +33,25 @@
 - [x] **State Management**: Central store for game state (Resources, Buildings, Units) — prototype in-memory implementation.
 - [ ] **Save/Load**: LocalStorage persistence (partial: auth token; full game save not implemented).
 
+## Phase 5: UI/UX & Polish
+- [x] **Building Detail Panel**:
+    - [x] Refactor to "Dark Parchment" aesthetic.
+    - [x] Fix React rendering bugs (null checks).
+- [x] **World Map**:
+    - [x] Switch to Pointy-Topped Hexes.
+    - [x] Implement Meta-Spiral Layout (Hexagonal board of hexagonal regions).
+    - [x] Fix alignment issues with Absolute Positioning.
+    - [x] Implement "Board Game" visuals (Red enemy borders, gold player borders, owner badges).
+    - [x] Remove gaps/dead tiles.
+    - [x] Improve readability (Top-down view, larger icons).
+- [x] **UI Refactoring (Dark Walnut & Parchment)**:
+    - [x] Global CSS Theme (`.beveled-panel`, `.standard-card`, `Cinzel`, `EB Garamond`).
+    - [x] Dashboard Layout (Chassis).
+    - [x] Map Tab (`RegionView`, `WorldBrowser`).
+    - [x] Buildings Tab (`QueuePanel`, `BuildingDetailPanel`, `BuildingCard`).
+    - [x] Military Tab (`MilitaryPanel`).
+    - [x] Research Tab (`TechTree`, `ResearchStrip`, `ResearchCard`, `ResearchPanel`).
+
 ## Notes & Next Tasks
 - Remaining near-term work:
   - Implement `ResourceStack` helper (if needed).

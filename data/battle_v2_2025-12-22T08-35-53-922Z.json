@@ -1,0 +1,230 @@
+{
+  "winner": "Draw",
+  "rounds": 9,
+  "attackerRemaining": [
+    {
+      "id": "Militia",
+      "count": 82
+    },
+    {
+      "id": "Archer",
+      "count": 41
+    }
+  ],
+  "defenderRemaining": [
+    {
+      "id": "Militia",
+      "count": 78
+    },
+    {
+      "id": "Knights",
+      "count": 20
+    }
+  ],
+  "salvagePool": {
+    "Food": 306,
+    "Timber": 232,
+    "IronIngot": 27
+  },
+  "insights": "The battle resulted in a mutual annihilation.",
+  "log": [
+    {
+      "round": 1,
+      "attackerRemaining": {
+        "Militia": 98,
+        "Archer": 49
+      },
+      "defenderRemaining": {
+        "Militia": 97,
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Militia": 2,
+        "Archer": 1
+      },
+      "defenderLosses": {
+        "Militia": 3
+      },
+      "damageDealt": {
+        "attacker": 210.00000000000003,
+        "defender": 191.53846153846155
+      }
+    },
+    {
+      "round": 2,
+      "attackerRemaining": {
+        "Militia": 96,
+        "Archer": 48
+      },
+      "defenderRemaining": {
+        "Militia": 94,
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Militia": 2,
+        "Archer": 1
+      },
+      "defenderLosses": {
+        "Militia": 3
+      },
+      "damageDealt": {
+        "attacker": 204.96949152542373,
+        "defender": 189.1153846153846
+      }
+    },
+    {
+      "round": 3,
+      "attackerRemaining": {
+        "Militia": 94,
+        "Archer": 47
+      },
+      "defenderRemaining": {
+        "Militia": 91,
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Militia": 2,
+        "Archer": 1
+      },
+      "defenderLosses": {
+        "Militia": 3
+      },
+      "damageDealt": {
+        "attacker": 199.9448275862069,
+        "defender": 186.6923076923077
+      }
+    },
+    {
+      "round": 4,
+      "attackerRemaining": {
+        "Militia": 92,
+        "Archer": 46
+      },
+      "defenderRemaining": {
+        "Militia": 88,
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Militia": 2,
+        "Archer": 1
+      },
+      "defenderLosses": {
+        "Militia": 3
+      },
+      "damageDealt": {
+        "attacker": 194.92631578947368,
+        "defender": 184.26923076923077
+      }
+    },
+    {
+      "round": 5,
+      "attackerRemaining": {
+        "Militia": 90,
+        "Archer": 45
+      },
+      "defenderRemaining": {
+        "Militia": 86,
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Militia": 2,
+        "Archer": 1
+      },
+      "defenderLosses": {
+        "Militia": 2
+      },
+      "damageDealt": {
+        "attacker": 189.9142857142857,
+        "defender": 181.84615384615387
+      }
+    },
+    {
+      "round": 6,
+      "attackerRemaining": {
+        "Militia": 88,
+        "Archer": 44
+      },
+      "defenderRemaining": {
+        "Militia": 84,
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Militia": 2,
+        "Archer": 1
+      },
+      "defenderLosses": {
+        "Militia": 2
+      },
+      "damageDealt": {
+        "attacker": 185.20481927710847,
+        "defender": 180.23076923076925
+      }
+    },
+    {
+      "round": 7,
+      "attackerRemaining": {
+        "Militia": 86,
+        "Archer": 43
+      },
+      "defenderRemaining": {
+        "Militia": 82,
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Militia": 2,
+        "Archer": 1
+      },
+      "defenderLosses": {
+        "Militia": 2
+      },
+      "damageDealt": {
+        "attacker": 180.50731707317075,
+        "defender": 178.6153846153846
+      }
+    },
+    {
+      "round": 8,
+      "attackerRemaining": {
+        "Militia": 84,
+        "Archer": 42
+      },
+      "defenderRemaining": {
+        "Militia": 80,
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Militia": 2,
+        "Archer": 1
+      },
+      "defenderLosses": {
+        "Militia": 2
+      },
+      "damageDealt": {
+        "attacker": 175.82222222222225,
+        "defender": 177.00000000000003
+      }
+    },
+    {
+      "round": 9,
+      "attackerRemaining": {
+        "Militia": 82,
+        "Archer": 41
+      },
+      "defenderRemaining": {
+        "Militia": 78,
+        "Knights": 20
+      },
+      "attackerLosses": {
+        "Militia": 2,
+        "Archer": 1
+      },
+      "defenderLosses": {
+        "Militia": 2
+      },
+      "damageDealt": {
+        "attacker": 171.15,
+        "defender": 175.3846153846154
+      }
+    }
+  ]
+}

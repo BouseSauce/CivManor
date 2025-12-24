@@ -1,0 +1,186 @@
+{
+  "seed": 642148,
+  "rounds": 10,
+  "winner": "Attacker",
+  "attacker": {
+    "start": 100,
+    "remaining": 4,
+    "casualties": 96
+  },
+  "defender": {
+    "start": 100,
+    "remaining": 0,
+    "casualties": 100
+  },
+  "totalCasualties": 196,
+  "salvageTotals": {
+    "Timber": 39,
+    "Stone": 29,
+    "Ore": 12,
+    "IronIngot": 6,
+    "Gold": 2
+  },
+  "citadelRuinsChance": 0.877,
+  "log": [
+    {
+      "round": 1,
+      "attackerRemaining": 99,
+      "defenderRemaining": 98,
+      "losses": {
+        "attLost": 1,
+        "defLost": 2
+      },
+      "salvage": {
+        "Timber": 0,
+        "Stone": 0,
+        "Ore": 0,
+        "IronIngot": 0,
+        "Gold": 0
+      }
+    },
+    {
+      "round": 2,
+      "attackerRemaining": 83,
+      "defenderRemaining": 80,
+      "losses": {
+        "attLost": 16,
+        "defLost": 18
+      },
+      "salvage": {
+        "Timber": 8,
+        "Stone": 4,
+        "Ore": 1,
+        "IronIngot": 2,
+        "Gold": 0
+      }
+    },
+    {
+      "round": 3,
+      "attackerRemaining": 64,
+      "defenderRemaining": 59,
+      "losses": {
+        "attLost": 19,
+        "defLost": 21
+      },
+      "salvage": {
+        "Timber": 10,
+        "Stone": 7,
+        "Ore": 3,
+        "IronIngot": 1,
+        "Gold": 1
+      }
+    },
+    {
+      "round": 4,
+      "attackerRemaining": 44,
+      "defenderRemaining": 45,
+      "losses": {
+        "attLost": 20,
+        "defLost": 14
+      },
+      "salvage": {
+        "Timber": 4,
+        "Stone": 7,
+        "Ore": 3,
+        "IronIngot": 1,
+        "Gold": 1
+      }
+    },
+    {
+      "round": 5,
+      "attackerRemaining": 29,
+      "defenderRemaining": 30,
+      "losses": {
+        "attLost": 15,
+        "defLost": 15
+      },
+      "salvage": {
+        "Timber": 8,
+        "Stone": 4,
+        "Ore": 3,
+        "IronIngot": 1,
+        "Gold": 0
+      }
+    },
+    {
+      "round": 6,
+      "attackerRemaining": 18,
+      "defenderRemaining": 22,
+      "losses": {
+        "attLost": 11,
+        "defLost": 8
+      },
+      "salvage": {
+        "Timber": 4,
+        "Stone": 4,
+        "Ore": 1,
+        "IronIngot": 1,
+        "Gold": 0
+      }
+    },
+    {
+      "round": 7,
+      "attackerRemaining": 11,
+      "defenderRemaining": 11,
+      "losses": {
+        "attLost": 7,
+        "defLost": 11
+      },
+      "salvage": {
+        "Timber": 3,
+        "Stone": 2,
+        "Ore": 1,
+        "IronIngot": 0,
+        "Gold": 0
+      }
+    },
+    {
+      "round": 8,
+      "attackerRemaining": 8,
+      "defenderRemaining": 5,
+      "losses": {
+        "attLost": 3,
+        "defLost": 6
+      },
+      "salvage": {
+        "Timber": 1,
+        "Stone": 1,
+        "Ore": 0,
+        "IronIngot": 0,
+        "Gold": 0
+      }
+    },
+    {
+      "round": 9,
+      "attackerRemaining": 5,
+      "defenderRemaining": 1,
+      "losses": {
+        "attLost": 3,
+        "defLost": 4
+      },
+      "salvage": {
+        "Timber": 1,
+        "Stone": 0,
+        "Ore": 0,
+        "IronIngot": 0,
+        "Gold": 0
+      }
+    },
+    {
+      "round": 10,
+      "attackerRemaining": 4,
+      "defenderRemaining": 0,
+      "losses": {
+        "attLost": 1,
+        "defLost": 1
+      },
+      "salvage": {
+        "Timber": 0,
+        "Stone": 0,
+        "Ore": 0,
+        "IronIngot": 0,
+        "Gold": 0
+      }
+    }
+  ]
+}

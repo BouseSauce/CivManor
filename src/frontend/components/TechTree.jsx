@@ -1,28 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { BUILDING_PREREQS, BUILDING_CONFIG } from '../../core/config/buildings.js';
-import { getIconForResource } from '../constants/iconMaps';
+import { RESEARCH_DEFS } from '../../core/config/research.js';
+import { BUILDING_CONFIG } from '../../core/config/buildings.js';
 import { GameClient } from '../api/client';
+import ResearchCard from './ResearchCard';
 
-export default function TechTree() {
-  // Build a map of tech -> list of buildings
-  const techMap = {};
-  Object.entries(BUILDING_PREREQS).forEach(([bId, req]) => {
-    if (req && req.tech) {
-      if (!techMap[req.tech]) techMap[req.tech] = [];
-      techMap[req.tech].push(bId);
-    }
+export default function TechTree({ area }) {
+  // Flatten RESEARCH_DEFS since it is grouped by building
+  const flatResearch = {};
+  Object.values(RESEARCH_DEFS).forEach(group => {
+    Object.assign(flatResearch, group);
   });
 
-  const techs = Object.keys(techMap);
-  const [researchState, setResearchState] = useState({ researched: [], active: null, defs: {} });
+  const [researchState, setResearchState] = useState({ researched: [], active: null, available: [], defs: {} });
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
         const r = await GameClient.getResearch();
-        if (mounted) setResearchState(r || { researched: [], active: null, defs: {} });
-      } catch (e) { console.error(e); }
+        if (mounted) setResearchState(r || { researched: [], active: null, available: [], defs: {} });
+      } catch (e) { console.error('Failed to load research', e); }
     };
     load();
     const t = setInterval(load, 3000);
@@ -37,49 +34,68 @@ export default function TechTree() {
     } catch (e) { alert('Start research error'); }
   };
 
+  // Sort research: Researched first, then Researchable (available or active), then Locked
+  const sortedTechs = Object.entries(flatResearch).sort(([idA], [idB]) => {
+    const isResearchedA = researchState.researched?.includes(idA);
+    const isResearchedB = researchState.researched?.includes(idB);
+    const isActiveA = researchState.active?.techId === idA;
+    const isActiveB = researchState.active?.techId === idB;
+    const isAvailableA = researchState.available?.includes(idA);
+    const isAvailableB = researchState.available?.includes(idB);
+
+    const status = (researched, active, available) => {
+      if (researched) return 0; // researched
+      if (active || available) return 1; // researchable (including in-progress)
+      return 2; // locked
+    };
+
+    const sA = status(isResearchedA, isActiveA, isAvailableA);
+    const sB = status(isResearchedB, isActiveB, isAvailableB);
+
+    if (sA !== sB) return sA - sB;
+    return idA.localeCompare(idB);
+  });
+
   return (
-    <div className="panel">
-      <div className="panel-header">Research & Tech</div>
-      <div className="panel-body" style={{ padding: 12 }}>
-        {techs.length === 0 && <div>No techs configured.</div>}
-        {techs.map(t => (
-          <div key={t} style={{ marginBottom: 12 }} className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 'bold' }}>{t}</div>
-                <div style={{ fontSize: 12, color: '#888', marginTop: 6 }}>Unlocks: {techMap[t].map(id => BUILDING_CONFIG[id]?.displayName || id).join(', ')}</div>
-                {/* Show cost and requirements if available from defs */}
-                {researchState.defs && researchState.defs[t] && (
-                  <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {Object.entries(researchState.defs[t].cost || {}).map(([res, amt]) => {
-                      const icon = getIconForResource(res) || { icon: 'fa-box', color: '#bbb' };
-                      return (
-                        <div key={res} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '4px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.02)' }}>
-                          <i className={`fa-solid ${icon.icon}`} style={{ color: icon.color }} />
-                          <div style={{ fontWeight: 700, color: '#ddd' }}>{amt}</div>
-                          <div style={{ color: '#999', fontSize: 12 }}>{res}</div>
-                        </div>
-                      );
-                    })}
-                    {researchState.defs[t].requiredTownLevel && (
-                      <div style={{ padding: '6px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.02)' }}>
-                        <div style={{ fontSize: 12, color: '#e0cda0' }}>Requires TownHall Lvl {researchState.defs[t].requiredTownLevel}</div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div>
-                {researchState.researched && researchState.researched.includes(t) ? (
-                  <div style={{ color: 'var(--accent-green)', fontWeight: 'bold' }}>Researched</div>
-                ) : researchState.active && researchState.active.techId === t ? (
-                  <div style={{ color: '#aaa' }}>In Progress</div>
-                ) : (
-                  <button className="btn btn-primary" onClick={() => start(t)}>Start</button>
-                )}
-              </div>
-            </div>
-          </div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="panel-header" style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          padding: '0 0 16px 0',
+          borderBottom: '2px solid var(--wood-dark)',
+          background: 'none'
+      }}>
+          <h2 className="font-cinzel" style={{ 
+              margin: 0, 
+              color: 'var(--text-main)', 
+              fontSize: '1.8rem', 
+              fontWeight: 800,
+              textShadow: '2px 2px 4px rgba(0,0,0,0.8), 0 0 10px rgba(197, 160, 89, 0.2)',
+              letterSpacing: '2px',
+              textTransform: 'uppercase'
+          }}>
+              <i className='fa-solid fa-flask' style={{ marginRight: 15, color: 'var(--accent-gold)' }}></i>Technology Tree
+          </h2>
+      </div>
+
+      <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
+          gap: '20px',
+          paddingBottom: '20px'
+      }}>
+        {sortedTechs.map(([id, def]) => (
+          <ResearchCard
+            key={id}
+            id={id}
+            def={def}
+            researched={researchState.researched?.includes(id)}
+            researchedList={researchState.researched || []}
+            active={researchState.active}
+            onStart={start}
+            area={area}
+          />
         ))}
       </div>
     </div>

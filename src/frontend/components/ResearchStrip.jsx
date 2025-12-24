@@ -21,8 +21,8 @@ export default function ResearchStrip() {
 
   if (!research || !research.active) {
     return (
-      <div style={{ padding: '6px 12px', color: '#888', borderBottom: '1px solid var(--panel-border)', background: '#141414' }}>
-        No active research
+      <div className="beveled-panel" style={{ margin: '0 0 10px 0', padding: '10px', textAlign: 'center', color: '#888' }}>
+        <span className="font-garamond" style={{ fontSize: '1.1em', color: '#aaa' }}>No active research</span>
       </div>
     );
   }
@@ -34,13 +34,23 @@ export default function ResearchStrip() {
   const pct = Math.floor((elapsed / total) * 100);
 
   return (
-    <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--panel-border)', background: '#141414' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontWeight: 'bold' }}>{active.techId}</div>
-        <div style={{ fontFamily: 'monospace' }}>{Math.max(0, Math.ceil((active.completesAt - now)/1000))}s</div>
+    <div className="beveled-panel" style={{ margin: '0 0 10px 0', padding: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+        <div className="font-cinzel" style={{ color: '#e0cda0', fontSize: '1.1em' }}>
+          <i className="fa-solid fa-flask" style={{ marginRight: '8px', color: '#aaffaa' }}></i>
+          {active.techId}
+        </div>
+        <div className="font-garamond" style={{ color: '#ccc', fontSize: '1.1em' }}>
+          {Math.max(0, Math.ceil((active.completesAt - now)/1000))}s remaining
+        </div>
       </div>
-      <div className="progress-bar-bg" style={{ marginTop: 6 }}>
-        <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
+      <div className="progress-bar-bg" style={{ height: '8px', background: '#222', border: '1px solid #444', borderRadius: '4px' }}>
+        <div className="progress-bar-fill" style={{ 
+          width: `${pct}%`, 
+          height: '100%', 
+          background: 'linear-gradient(90deg, #2e7d32, #66bb6a)',
+          borderRadius: '3px'
+        }} />
       </div>
     </div>
   );

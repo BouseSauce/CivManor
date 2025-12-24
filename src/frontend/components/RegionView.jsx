@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import BuildingPreview from './BuildingPreview';
 import { GameClient } from '../api/client';
+import HexGrid from './HexGrid';
 
 export default function RegionView({ region, onBack, onViewArea, onClaim, user }) {
   const [previewFor, setPreviewFor] = useState(null);
@@ -9,120 +10,110 @@ export default function RegionView({ region, onBack, onViewArea, onClaim, user }
   const [messageModal, setMessageModal] = useState(null); // { area, toUserId, toName, subject, body, sending }
 
   if (!region) return null;
+
+  // Map areas to grid positions (10x10)
+  const gridItems = region.areas.map((a, i) => ({
+    ...a,
+    x: a.x !== undefined ? a.x : i % 10,
+    y: a.y !== undefined ? a.y : Math.floor(i / 10),
+    owned: a.ownerId === user?.id,
+    allied: false, // TODO: Implement alliance logic
+    enemy: a.ownerId && a.ownerId !== user?.id
+  }));
+
+  const handleHexClick = (item) => {
+    if (item.ownerId) {
+      onViewArea(item.id, item.ownerId);
+    } else {
+      // Prompt to claim if unowned
+      const cartCount = (user && user.inventory && user.inventory.units && user.inventory.units.TradeCart) || 0;
+      if (cartCount > 0) {
+        setClaimModal({ area: item, name: item.name || '', loading: false });
+      } else {
+        alert('This area is unowned, but you need a Trade Cart to claim it.');
+      }
+    }
+  };
+
   return (
-    <div className="region-view">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h3 style={{ margin: 0 }}>{region.name}</h3>
-        <div>
-          <button className="btn" onClick={onBack}>Back to Regions</button>
-        </div>
+    <div className="region-view" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div className="beveled-panel" style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        padding: '12px', 
+        marginBottom: '12px' 
+      }}>
+        <span className="font-cinzel" style={{ fontSize: '1.2em', color: '#e0cda0' }}>{region.name} (Micro View)</span>
+        <button className="btn-primary font-cinzel" onClick={onBack}>Back to World</button>
       </div>
 
-      <div className="area-grid">
-        {region.areas.map(a => (
-          <div key={a.id} className="area-tile panel">
-            <div style={{ fontWeight: 'bold' }}>{a.name}</div>
-            <div style={{ fontSize: 12, color: '#bbb' }}>{a.id}</div>
-            <div style={{ marginTop: 8 }}>{a.ownerId ? `Owner: ${a.ownerName || a.ownerId}` : 'Unowned'}</div>
-            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-              {a.ownerId ? (
-                <>
-                  <button className="btn" onClick={() => onViewArea(a.id, a.ownerId)}>View</button>
-                  <button className="btn" onClick={() => setMessageModal({ area: a, toUserId: a.ownerId, toName: a.ownerName || a.ownerId, subject: `Regarding ${a.name}`, body: '', sending: false })}>Message</button>
-                </>
-              ) : (
-                (() => {
-                  const cartCount = (user && user.inventory && user.inventory.units && user.inventory.units.TradeCart) || 0;
-                  // Only show the claim button when the user actually has a TradeCart.
-                  if (cartCount < 1) return null;
-                  const disabled = claiming === a.id;
-                  return (
-                    <>
-                      <button
-                        className="btn btn-claim"
-                        disabled={disabled}
-                        onClick={() => {
-                          if (disabled) return;
-                          // open claim modal allowing name change
-                          setClaimModal({ area: a, name: a.name || '', loading: false });
-                        }}
-                      >{claiming === a.id ? 'Claiming...' : 'Claim'}</button>
-
-                      {claimModal && claimModal.area && claimModal.area.id === a.id && (
-                        <div className="overlay">
-                          <div className="overlay-content panel" style={{ maxWidth: 520 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <h3 style={{ margin: 0 }}>Claim Area</h3>
-                              <button className="btn" onClick={() => setClaimModal(null)}>Close</button>
-                            </div>
-                            <div style={{ marginTop: 12 }}>
-                              <div style={{ marginBottom: 8 }}>You're about to claim <strong>{a.name}</strong> as your area. You may change the name below.</div>
-                              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                                <input value={claimModal.name} onChange={e => setClaimModal({ ...claimModal, name: e.target.value })} style={{ flex: 1 }} />
-                                <div>
-                                  <button className="btn btn-claim" disabled={claimModal.loading} onClick={async () => {
-                                    try {
-                                      setClaiming(a.id);
-                                      setClaimModal({ ...claimModal, loading: true });
-                                      let res = null;
-                                      if (onClaim) {
-                                        // If parent provided a claim handler, call it with name
-                                        try { res = await onClaim(a.id, claimModal.name); } catch (e) { res = null; }
-                                      } else {
-                                        res = await GameClient.claimArea(a.id, claimModal.name);
-                                      }
-                                      // If parent handler didn't return success, try to fetch area to verify
-                                      if (res && res.success) {
-                                        const owned = await GameClient.getArea(a.id);
-                                        if (owned && owned.owned) {
-                                          setClaimModal(null);
-                                          setClaiming(null);
-                                          onViewArea && onViewArea(a.id, owned.ownerId);
-                                        }
-                                      } else {
-                                        // Attempt to fetch area state as fallback
-                                        const owned = await GameClient.getArea(a.id).catch(() => null);
-                                        if (owned && owned.owned) {
-                                          setClaimModal(null);
-                                          setClaiming(null);
-                                          onViewArea && onViewArea(a.id, owned.ownerId);
-                                        } else {
-                                          alert('Failed to claim area');
-                                        }
-                                      }
-                                    } catch (err) {
-                                      console.error('Claim error', err);
-                                      alert('Error claiming area');
-                                    } finally {
-                                      setClaiming(null);
-                                      setClaimModal(null);
-                                    }
-                                  }}>Confirm</button>
-                                </div>
-                              </div>
-                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Claiming will consume one TradeCart from your inventory.</div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()
-              )}
-            </div>
-          </div>
-        ))}
+      <div className="beveled-panel" style={{ flex: 1, overflow: 'hidden', padding: '0', position: 'relative', background: '#1a1a1a' }}>
+        <HexGrid 
+          width={10} 
+          height={10} 
+          items={gridItems} 
+          className="micro"
+          onHexClick={handleHexClick}
+          renderHexContent={(item) => (
+            <>
+              <div className="hex-icon">
+                {item.owned ? <i className="fa-solid fa-certificate" style={{color: '#ffd700'}}></i> : 
+                 item.enemy ? <i className="fa-solid fa-shield-halved" style={{color: '#f44336'}}></i> :
+                 <i className="fa-solid fa-tree" style={{ opacity: 0.5 }}></i>}
+              </div>
+              <div className="hex-label font-garamond" style={{ fontSize: '0.7rem', color: '#ccc' }}>{item.name}</div>
+              {item.ownerId && <div className="hex-coords font-garamond" style={{ fontSize: '0.6rem', color: '#aaa' }}>{item.ownerName || 'Player'}</div>}
+            </>
+          )}
+        />
       </div>
 
-      {previewFor && (
+      {/* Modals (Claim, Message, Preview) */}
+      {claimModal && claimModal.area && (
         <div className="overlay">
-          <div className="overlay-content panel">
+          <div className="overlay-content panel" style={{ maxWidth: 520 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0 }}>Build Preview - {previewFor}</h3>
-              <button className="btn" onClick={() => setPreviewFor(null)}>Close</button>
+              <h3 style={{ margin: 0 }}>Claim Area</h3>
+              <button className="btn" onClick={() => setClaimModal(null)}>Close</button>
             </div>
             <div style={{ marginTop: 12 }}>
-              <BuildingPreview />
+              <div style={{ marginBottom: 8 }}>You're about to claim <strong>{claimModal.area.name}</strong>.</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <input value={claimModal.name} onChange={e => setClaimModal({ ...claimModal, name: e.target.value })} style={{ flex: 1 }} />
+                <button className="btn btn-claim" disabled={claimModal.loading} onClick={async () => {
+                  try {
+                    setClaiming(claimModal.area.id);
+                    setClaimModal({ ...claimModal, loading: true });
+                    let res = null;
+                    if (onClaim) {
+                      try { res = await onClaim(claimModal.area.id, claimModal.name); } catch (e) { res = null; }
+                    } else {
+                      res = await GameClient.claimArea(claimModal.area.id, claimModal.name);
+                    }
+                    if (res && res.success) {
+                       // Success handled by parent refresh usually, but we close modal
+                       setClaimModal(null);
+                    } else {
+                       // Fallback check
+                       const owned = await GameClient.getArea(claimModal.area.id).catch(() => null);
+                       if (owned && owned.owned) {
+                         setClaimModal(null);
+                         onViewArea && onViewArea(claimModal.area.id, owned.ownerId);
+                       } else {
+                         alert('Failed to claim area');
+                       }
+                    }
+                  } catch (err) {
+                    console.error('Claim error', err);
+                    alert('Error claiming area');
+                  } finally {
+                    setClaiming(null);
+                    setClaimModal(null);
+                  }
+                }}>Confirm</button>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cost: 1 Trade Cart</div>
             </div>
           </div>
         </div>
@@ -165,3 +156,4 @@ export default function RegionView({ region, onBack, onViewArea, onClaim, user }
     </div>
   );
 }
+

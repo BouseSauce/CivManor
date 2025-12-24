@@ -11,7 +11,10 @@
  * @param {number} speedMultiplier - Unit speed (1 = standard)
  * @returns {number} - Time in ticks
  */
-export function calculateTravelTime(origin, destination, speedMultiplier = 1) {
+import { WORLD_CONFIG } from '../config/worlds.js';
+
+export function calculateTravelTime(origin, destination, speedMultiplier) {
+    speedMultiplier = (typeof speedMultiplier !== 'undefined' && speedMultiplier !== null) ? speedMultiplier : (WORLD_CONFIG && WORLD_CONFIG.armySpeed) || 1;
     const parseCoord = (coord) => {
         const [rPart, aPart] = coord.split(':');
         const r = parseInt(rPart.replace('R', ''), 10);

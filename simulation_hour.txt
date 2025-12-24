@@ -1,0 +1,36 @@
+--- BEFORE 1 HOUR TICK ---
+Population: 80 Villagers: 80
+Assignments: {
+  "Farm": 9,
+  "LoggingCamp": 9,
+  "StonePit": 7,
+  "DeepMine": 6
+}
+Resources before: {
+  "Timber": 300,
+  "Stone": 200,
+  "Food": 400,
+  "Gold": 5
+}
+Capacities: Timber 3306 Stone 2644 Food 3306
+
+--- TICK 3600 [AssignDemo] (dt=3600s) ---
+Building storage-limited: StonePit (resource Stone)
+Building storage-limited: Farm (resource Food)
+Population: 20 (Approval: 98%)
+
+--- AFTER 1 HOUR TICK ---
+Population: 20
+Resources after: {
+  "Timber": 2996.6,
+  "Stone": 2644,
+  "Food": 3305.98,
+  "Gold": 5
+}
+
+Deltas: {
+  "Timber": 2696.6,
+  "Stone": 2444,
+  "Food": 2905.98,
+  "Gold": 0
+}

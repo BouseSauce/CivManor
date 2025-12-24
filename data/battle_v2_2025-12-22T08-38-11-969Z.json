@@ -1,0 +1,196 @@
+{
+  "winner": "Draw",
+  "rounds": 9,
+  "attackerRemaining": [
+    {
+      "id": "Knights",
+      "count": 41
+    }
+  ],
+  "defenderRemaining": [
+    {
+      "id": "Spearmen",
+      "count": 76
+    }
+  ],
+  "salvagePool": {
+    "Steel": 81,
+    "Horses": 0,
+    "Food": 393,
+    "Timber": 264
+  },
+  "insights": "The battle resulted in a bloody stalemate after 9 rounds. The Attacker's Cavalry was held back by the Defender's Spearmen.",
+  "log": [
+    {
+      "round": 1,
+      "attackerRemaining": {
+        "Knights": 49
+      },
+      "defenderRemaining": {
+        "Spearmen": 97
+      },
+      "attackerLosses": {
+        "Knights": 1
+      },
+      "defenderLosses": {
+        "Spearmen": 3
+      },
+      "damageDealt": {
+        "attacker": 200,
+        "defender": 225
+      }
+    },
+    {
+      "round": 2,
+      "attackerRemaining": {
+        "Knights": 48
+      },
+      "defenderRemaining": {
+        "Spearmen": 94
+      },
+      "attackerLosses": {
+        "Knights": 1
+      },
+      "defenderLosses": {
+        "Spearmen": 3
+      },
+      "damageDealt": {
+        "attacker": 196,
+        "defender": 218.25
+      }
+    },
+    {
+      "round": 3,
+      "attackerRemaining": {
+        "Knights": 47
+      },
+      "defenderRemaining": {
+        "Spearmen": 91
+      },
+      "attackerLosses": {
+        "Knights": 1
+      },
+      "defenderLosses": {
+        "Spearmen": 3
+      },
+      "damageDealt": {
+        "attacker": 192,
+        "defender": 211.5
+      }
+    },
+    {
+      "round": 4,
+      "attackerRemaining": {
+        "Knights": 46
+      },
+      "defenderRemaining": {
+        "Spearmen": 88
+      },
+      "attackerLosses": {
+        "Knights": 1
+      },
+      "defenderLosses": {
+        "Spearmen": 3
+      },
+      "damageDealt": {
+        "attacker": 188,
+        "defender": 204.75
+      }
+    },
+    {
+      "round": 5,
+      "attackerRemaining": {
+        "Knights": 45
+      },
+      "defenderRemaining": {
+        "Spearmen": 85
+      },
+      "attackerLosses": {
+        "Knights": 1
+      },
+      "defenderLosses": {
+        "Spearmen": 3
+      },
+      "damageDealt": {
+        "attacker": 184,
+        "defender": 198
+      }
+    },
+    {
+      "round": 6,
+      "attackerRemaining": {
+        "Knights": 44
+      },
+      "defenderRemaining": {
+        "Spearmen": 82
+      },
+      "attackerLosses": {
+        "Knights": 1
+      },
+      "defenderLosses": {
+        "Spearmen": 3
+      },
+      "damageDealt": {
+        "attacker": 180,
+        "defender": 191.25
+      }
+    },
+    {
+      "round": 7,
+      "attackerRemaining": {
+        "Knights": 43
+      },
+      "defenderRemaining": {
+        "Spearmen": 80
+      },
+      "attackerLosses": {
+        "Knights": 1
+      },
+      "defenderLosses": {
+        "Spearmen": 2
+      },
+      "damageDealt": {
+        "attacker": 176,
+        "defender": 184.5
+      }
+    },
+    {
+      "round": 8,
+      "attackerRemaining": {
+        "Knights": 42
+      },
+      "defenderRemaining": {
+        "Spearmen": 78
+      },
+      "attackerLosses": {
+        "Knights": 1
+      },
+      "defenderLosses": {
+        "Spearmen": 2
+      },
+      "damageDealt": {
+        "attacker": 172,
+        "defender": 180
+      }
+    },
+    {
+      "round": 9,
+      "attackerRemaining": {
+        "Knights": 41
+      },
+      "defenderRemaining": {
+        "Spearmen": 76
+      },
+      "attackerLosses": {
+        "Knights": 1
+      },
+      "defenderLosses": {
+        "Spearmen": 2
+      },
+      "damageDealt": {
+        "attacker": 168,
+        "defender": 175.5
+      }
+    }
+  ]
+}

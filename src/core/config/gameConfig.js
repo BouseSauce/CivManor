@@ -1,7 +1,8 @@
+import { WORLD_CONFIG } from './worlds.js';
+
+// GAME_CONFIG exposes runtime UI-friendly settings. Use the world's `tickMs` as
+// the single authoritative tick interval to avoid duplicated/contradictory
+// values. If `WORLD_CONFIG.tickMs` is missing, fall back to 1000ms for UI polling.
 export const GAME_CONFIG = {
-    // Server tick rate in milliseconds.
-    // Lower value = faster game speed.
-    // 1000 = 1 tick per second (Normal Speed)
-    // 100 = 10 ticks per second (10x Speed)
-    TICK_MS: 1000
+    TICK_MS: (WORLD_CONFIG && typeof WORLD_CONFIG.tickMs === 'number') ? WORLD_CONFIG.tickMs : 1000
 };

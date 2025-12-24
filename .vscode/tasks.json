@@ -1,0 +1,10 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "append_nav_styles",
+			"type": "shell",
+			"command": "echo \"/* Nav Icons */ .nav-icon { width: 64px; height: 64px; background: linear-gradient(145deg, #2d1b0d, #1a0f0a); border: 2px solid #5c4033; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 8px rgba(0,0,0,0.5); color: #8d6e63; font-size: 1.5rem; } .nav-icon:hover { transform: scale(1.05); border-color: #ffd700; color: #ffd700; box-shadow: 0 0 15px rgba(255, 215, 0, 0.3); } .nav-icon.active { border-color: #ffd700; color: #ffd700; background: #3e2723; }\" >> src/frontend/styles/main.css"
+		}
+	]
+}

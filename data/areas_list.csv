@@ -1,0 +1,13 @@
+regionId,regionName,areaId,areaName,ownerId,ownerName
+R3,"Region 3 — MOUNTBRAY",R3:A3,"MOUNTBRAY",,""
+R3,"Region 3 — MOUNTBRAY",R3:A4,"NARROWFORD",,""
+R7,"Region 7 — NARROWFORD",R7:A4,"NARROWFORD",,""
+R1,"Region 1 — IRON FORGE",R1:A1,"IRON FORGE",,""
+R1,"Region 1 — IRON FORGE",R1:A2,"BIRCH HOLLOW",,""
+R1,"Region 1 — IRON FORGE",R1:A3,"SILVER GLEN",,""
+R1,"Region 1 — IRON FORGE",R1:A4,"STONEFORD",,""
+R1,"Region 1 — IRON FORGE",R1:A5,"RAVENFORD",,""
+R1,"Region 1 — IRON FORGE",R1:A7,"ELMWOOD",,""
+R9,"Region 9 — BIRCH HOLLOW",R9:A2,"BIRCH HOLLOW",,""
+R9,"Region 9 — BIRCH HOLLOW",R9:A4,"STONEFORD",,""
+R4,"Region 4 — RIVERDALE",R4:A3,"RIVERDALE",,""

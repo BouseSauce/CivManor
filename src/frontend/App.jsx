@@ -114,6 +114,10 @@ function App() {
   if (!user) {
     return (
       <div className="auth-viewport">
+        <div className="auth-header">
+          <h1>CIVBUILDER</h1>
+          <p>Build Your Empire, Conquer the World</p>
+        </div>
         <div className="auth-columns">
           <Login onAuth={handleAuth} />
           <Register onRegistered={() => alert('You can now log in with your new account.')} />

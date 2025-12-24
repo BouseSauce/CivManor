@@ -1,0 +1,106 @@
+{
+  "regions": [
+    {
+      "id": "R3",
+      "name": "Region 3",
+      "areas": [
+        {
+          "id": "R3:A3",
+          "name": "MOUNTBRAY",
+          "ownerId": null,
+          "ownerName": null
+        },
+        {
+          "id": "R3:A4",
+          "name": "NARROWFORD",
+          "ownerId": null,
+          "ownerName": null
+        }
+      ]
+    },
+    {
+      "id": "R7",
+      "name": "Region 7",
+      "areas": [
+        {
+          "id": "R7:A4",
+          "name": "NARROWFORD",
+          "ownerId": null,
+          "ownerName": null
+        }
+      ]
+    },
+    {
+      "id": "R1",
+      "name": "Region 1",
+      "areas": [
+        {
+          "id": "R1:A1",
+          "name": "IRON FORGE",
+          "ownerId": null,
+          "ownerName": null
+        },
+        {
+          "id": "R1:A2",
+          "name": "BIRCH HOLLOW",
+          "ownerId": null,
+          "ownerName": null
+        },
+        {
+          "id": "R1:A3",
+          "name": "SILVER GLEN",
+          "ownerId": null,
+          "ownerName": null
+        },
+        {
+          "id": "R1:A4",
+          "name": "STONEFORD",
+          "ownerId": null,
+          "ownerName": null
+        },
+        {
+          "id": "R1:A5",
+          "name": "RAVENFORD",
+          "ownerId": null,
+          "ownerName": null
+        },
+        {
+          "id": "R1:A7",
+          "name": "ELMWOOD",
+          "ownerId": null,
+          "ownerName": null
+        }
+      ]
+    },
+    {
+      "id": "R9",
+      "name": "Region 9",
+      "areas": [
+        {
+          "id": "R9:A2",
+          "name": "BIRCH HOLLOW",
+          "ownerId": null,
+          "ownerName": null
+        },
+        {
+          "id": "R9:A4",
+          "name": "STONEFORD",
+          "ownerId": null,
+          "ownerName": null
+        }
+      ]
+    },
+    {
+      "id": "R4",
+      "name": "Region 4",
+      "areas": [
+        {
+          "id": "R4:A3",
+          "name": "RIVERDALE",
+          "ownerId": null,
+          "ownerName": null
+        }
+      ]
+    }
+  ]
+}
