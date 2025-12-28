@@ -12,7 +12,7 @@
 
 ## Phase 2: Core Logic & Simulation
 - [x] **Scaling Logic**:
-    - [x] Implement `calculateUpgradeCost` (Universal Formula + T3 Tools Bottleneck).
+    - [x] Implement `calculateUpgradeCost` (Universal Formula).
 - [x] **Economy & Population**:
     - [x] Implement `calculateApproval` (Pop, Capacity, Food, Tax).
     - [x] Implement `processPopulationTick` (Starvation, Growth/Decline).

@@ -129,44 +129,59 @@ export default function BuildingCard({ b, onOpen, onAssign, onUpgrade, compact =
                     <div className="req-header font-cinzel">Unlock Requirements</div>
                     <div className="req-list font-garamond">
                         {(() => {
-                            const req = cfg.requirement;
-                            if (!req) return <div className="req-item unmet">Unknown Requirement</div>;
-                            
-                            const reqs = [];
-                            
-                            // Town Hall Requirement
-                            if (req.building === 'TownHall') {
-                                const th = (area?.buildings || []).find(x => x.id === 'TownHall');
-                                const met = (th?.level || 0) >= req.level;
-                                reqs.push({
-                                    label: `Town Hall Lvl ${req.level}`,
-                                    met
-                                });
-                            } 
-                            // Other Building Requirement
-                            else if (req.building) {
-                                const target = (area?.buildings || []).find(x => x.id === req.building);
-                                const met = (target?.level || 0) >= (req.level || 1);
-                                const targetName = BUILDING_CONFIG[req.building]?.displayName || req.building;
-                                reqs.push({
-                                    label: `${targetName} Lvl ${req.level || 1}`,
-                                    met
-                                });
-                            }
-                            // Quest/Item Requirement (Generic fallback)
-                            else {
-                                reqs.push({
-                                    label: 'Special Event / Quest',
-                                    met: false // Usually handled by game logic unlocking it
-                                });
-                            }
+                          const req = cfg.requirement;
+                          if (!req) return <div className="req-item unmet">Unknown Requirement</div>;
 
-                            return reqs.map((r, i) => (
-                                <div key={i} className={`req-item ${r.met ? 'met' : 'unmet'}`}>
-                                    {r.met ? <i className="fas fa-check-circle"></i> : <i className="fas fa-times-circle"></i>}
-                                    {r.label}
-                                </div>
-                            ));
+                          const reqs = [];
+
+                          // Single TownHall-style requirement (legacy)
+                          if (req.building === 'TownHall') {
+                            const th = (area?.buildings || []).find(x => x.id === 'TownHall');
+                            const met = (th?.level || 0) >= req.level;
+                            reqs.push({ label: `Town Hall Lvl ${req.level}`, met });
+                          }
+
+                          // Single other building requirement (legacy)
+                          if (req.building && req.building !== 'TownHall') {
+                            const target = (area?.buildings || []).find(x => x.id === req.building);
+                            const met = (target?.level || 0) >= (req.level || 1);
+                            const targetName = BUILDING_CONFIG[req.building]?.displayName || req.building;
+                            reqs.push({ label: `${targetName} Lvl ${req.level || 1}`, met });
+                          }
+
+                          // Multiple building requirements (map) e.g. { buildings: { TownHall:3, LoggingCamp:1 }}
+                          if (req.buildings && typeof req.buildings === 'object') {
+                            Object.entries(req.buildings).forEach(([bid, lvl]) => {
+                              const target = (area?.buildings || []).find(x => x.id === bid);
+                              const met = (target?.level || 0) >= (lvl || 1);
+                              const targetName = BUILDING_CONFIG[bid]?.displayName || bid;
+                              reqs.push({ label: `${targetName} Lvl ${lvl}`, met });
+                            });
+                          }
+
+                          // Other generic requirements
+                          if (req.quest) {
+                            reqs.push({ label: 'Special Event / Quest', met: false });
+                          }
+                          if (req.items) {
+                            reqs.push({ label: 'Requires specific items', met: false });
+                          }
+                          if (req.tech) {
+                            const need = Array.isArray(req.tech) ? req.tech : [req.tech];
+                            need.forEach(t => reqs.push({ label: `Tech: ${t}`, met: (area?.researchedTechs || []).includes(t) }));
+                          }
+
+                          // If nothing was pushed, show generic fallback
+                          if (reqs.length === 0) {
+                            reqs.push({ label: 'Special Event / Quest', met: false });
+                          }
+
+                          return reqs.map((r, i) => (
+                            <div key={i} className={`req-item ${r.met ? 'met' : 'unmet'}`}>
+                              {r.met ? <i className="fas fa-check-circle"></i> : <i className="fas fa-times-circle"></i>}
+                              {r.label}
+                            </div>
+                          ));
                         })()}
                     </div>
                 </div>

@@ -69,16 +69,16 @@ const GlobalResearchWidget = ({ onClick }) => {
       <div style={{ 
         width: 40, height: 40, 
         borderRadius: '50%', 
-        background: 'var(--parchment)',
+        background: 'rgba(255,255,255,0.05)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         border: '2px solid var(--wood-medium)',
         boxShadow: 'inset 0 0 4px rgba(0,0,0,0.2)'
       }}>
-        <i className="fas fa-scroll" style={{ color: 'var(--wood-dark)', fontSize: '1.2rem' }}></i>
+        <i className="fas fa-scroll" style={{ color: 'var(--accent-gold)', fontSize: '1.2rem' }}></i>
       </div>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-        <div className="font-cinzel" style={{ fontSize: '0.85rem', color: 'var(--parchment)', fontWeight: 'bold', letterSpacing: 0.5 }}>
+        <div className="font-cinzel" style={{ fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: 'bold', letterSpacing: 0.5 }}>
           {researchName}
         </div>
         <div style={{ width: '100%', height: 6, background: 'rgba(0,0,0,0.3)', borderRadius: 3, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>

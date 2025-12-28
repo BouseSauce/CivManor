@@ -48,12 +48,12 @@ function computeStoreCapacity(storeLevel, res) {
       deltas['Timber'] = (deltas['Timber']||0) + amt;
     }
 
-    // SurfaceMine -> Stone
-    const smLevel = buildings['SurfaceMine'] || 0;
-    const smAssigned = assignments['SurfaceMine'] || 0;
-    if (smLevel>0 && smAssigned>0) {
+    // StonePit -> Stone
+    const spLevel = buildings['StonePit'] || 0;
+    const spAssigned = assignments['StonePit'] || 0;
+    if (spLevel>0 && spAssigned>0) {
       const base = PRODUCTION_RATES.stonePitPerWorkerPerSecond || 0.1;
-      const amt = getOutput(base, smLevel, smAssigned);
+      const amt = getOutput(base, spLevel, spAssigned);
       deltas['Stone'] = (deltas['Stone']||0) + amt;
     }
 
@@ -72,11 +72,12 @@ function computeStoreCapacity(storeLevel, res) {
       }
     }
 
-    // Farmhouse -> Bread (per level)
-    const fhLevel = buildings['Farmhouse'] || 0;
-    if (fhLevel>0) {
-      const amt = getOutput(PRODUCTION_RATES.breadPerLevelPerSecond, fhLevel, 1);
-      deltas['Bread'] = (deltas['Bread']||0) + amt;
+    // TownHall -> Food (Gathering)
+    const thLevel = buildings['TownHall'] || 0;
+    const thAssigned = assignments['TownHall'] || 0;
+    if (thLevel > 0 && thAssigned > 0) {
+      const amt = getOutput(0.15, thLevel, thAssigned);
+      deltas['Food'] = (deltas['Food'] || 0) + amt;
     }
 
     // Farm -> Food

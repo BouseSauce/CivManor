@@ -83,7 +83,9 @@ export default function TechTree({ area }) {
           display: 'grid', 
           gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
           gap: '20px',
-          paddingBottom: '20px'
+          paddingBottom: '20px',
+          overflowY: 'auto',
+          flex: 1
       }}>
         {sortedTechs.map(([id, def]) => (
           <ResearchCard

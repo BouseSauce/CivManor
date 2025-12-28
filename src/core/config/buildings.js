@@ -13,17 +13,30 @@ export const BUILDING_CONFIG = {
         growthFactor: 1.8,
         baseCost: { [ResourceEnum.Timber]: 200, [ResourceEnum.Stone]: 150 },
         workforceCap: 10,
-        baseOutput: { populationCap: 50, foodPerHour: 90 },
+        baseOutput: { populationCap: 50, foodPerHour: 350 },
         housingByLevel: [0, 50, 100, 200, 400, 800, 1500, 3000, 6000, 12000, 25000],
         requirement: null,
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null,
         allowsScholars: true,
         nameEvolution: [
-            { maxLevel: 10, name: 'Settlement Hall', icon: 'fa-warehouse' },
+            { maxLevel: 10, name: 'Farmhouse', icon: 'fa-warehouse' },
             { maxLevel: 20, name: 'Colonial Estate', icon: 'fa-landmark' },
             { maxLevel: 999, name: 'Imperial Manor', icon: 'fa-chess-rook' }
+        ],
+        civicUpgrades: [
+            {
+                id: 'stone_well',
+                name: 'Stone Well',
+                cost: { [ResourceEnum.Stone]: 500 },
+                description: 'Provides clean water, reducing disease and boosting growth (+10%).',
+                effect: { growthBonus: 0.10 }
+            },
+            {
+                id: 'public_oven',
+                name: 'Public Oven',
+                cost: { [ResourceEnum.Stone]: 300, [ResourceEnum.Timber]: 300 },
+                description: 'Community cooking area that improves food efficiency and growth (+5%).',
+                effect: { growthBonus: 0.05 }
+            }
         ]
     },
 
@@ -36,53 +49,46 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Timber]: 50, [ResourceEnum.Stone]: 20 },
         workforceCap: 2,
         baseOutput: { timberPerHour: 60 },
-        requirement: null,
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: null
     },
-    SurfaceMine: {
-        id: 'SurfaceMine', name: 'Surface Mine', displayName: 'Surface Mine', tier: 1,
+    StonePit: {
+        id: 'StonePit', name: 'Stone Pit', displayName: 'Stone Pit', tier: 1,
         category: 'Extraction',
-        icon: 'fa-mountain',
-        tags: ['extraction', 'gathering', 'stone', 'ore'],
-        description: 'Extracts Stone from the earth. Can be upgraded to extract Ore with proper research.',
-        growthFactor: 1.6,
-        baseCost: { [ResourceEnum.Timber]: 80, [ResourceEnum.Stone]: 40 },
-        workforceCap: 2,
-        baseOutput: { special: 'Stone (Lvl 1-9) / Ore (Lvl 10+ w/ Tech)' },
-        requirement: null,
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        icon: 'fa-hammer',
+        tags: ['extraction', 'gathering', 'stone'],
+        description: 'A basic quarry for extracting Stone.',
+        growthFactor: 1.5,
+        baseCost: { [ResourceEnum.Timber]: 100, [ResourceEnum.Stone]: 50 },
+        workforceCap: 3,
+        baseOutput: { stonePerHour: 80 },
+        requirement: null
     },
+    
     Storehouse: {
         id: 'Storehouse', name: 'Storehouse', displayName: 'Storehouse', tier: 1,
         category: 'Economy',
         tags: ['economy', 'storage'],
         description: 'Increases the maximum storage capacity for all resource types.',
-        growthFactor: 2.0,
+        growthFactor: 1.5,
         baseCost: { [ResourceEnum.Timber]: 150, [ResourceEnum.Stone]: 75 },
         workforceCap: 0,
+        // Start with greatly reduced capacity to encourage upgrading the Storehouse
         storageBase: {
-            [ResourceEnum.Timber]: 2500,
-            [ResourceEnum.Stone]: 2000,
-            [ResourceEnum.Food]: 2500,
-            [ResourceEnum.Bread]: 2500,
-            [ResourceEnum.Planks]: 1200,
-            [ResourceEnum.IronIngot]: 1000,
-            [ResourceEnum.Coal]: 1000,
-            [ResourceEnum.Steel]: 800,
-            [ResourceEnum.Knowledge]: 200,
-            [ResourceEnum.GoldOre]: 500,
-            [ResourceEnum.GoldIngot]: 300
+            [ResourceEnum.Timber]: 500,
+            [ResourceEnum.Stone]: 400,
+            [ResourceEnum.Food]: 10000,
+            [ResourceEnum.Bread]: 10000,
+            [ResourceEnum.Planks]: 500,
+            [ResourceEnum.IronIngot]: 400,
+            [ResourceEnum.Coal]: 400,
+            [ResourceEnum.Steel]: 300,
+            [ResourceEnum.Knowledge]: 100,
+            [ResourceEnum.GoldOre]: 200,
+            [ResourceEnum.GoldIngot]: 150
         },
-        storageMultiplier: 1.15,
+        storageMultiplier: 1.20,
         baseOutput: { storageCapacity: 2500 },
-        requirement: null,
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: null
     },
 
     Barracks: {
@@ -94,10 +100,8 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Timber]: 150, [ResourceEnum.Stone]: 100 },
         workforceCap: 5,
         baseOutput: { special: 'Recruits Militia and Spearmen' },
-        requirement: { building: 'TownHall', level: 1 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        // Require the Settlement Hall (TownHall) to reach level 3 before Barracks is available
+        requirement: { buildings: { TownHall: 3 } }
     },
 
     Sawpit: {
@@ -109,10 +113,7 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Timber]: 500, [ResourceEnum.Stone]: 200 },
         workforceCap: 3,
         baseOutput: { ratio: 4 },
-        requirement: { building: 'TownHall', level: 5 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'TownHall', level: 5 }
     },
     Bloomery: {
         id: 'Bloomery', name: 'Bloomery', displayName: 'Bloomery', tier: 2,
@@ -124,10 +125,7 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Timber]: 800, [ResourceEnum.Stone]: 400 },
         workforceCap: 5,
         baseOutput: { ratio: 5 },
-        requirement: { building: 'SurfaceMine', level: 5 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'StonePit', level: 5 }
     },
     Library: {
         id: 'Library', name: 'Library', displayName: 'Library', tier: 2,
@@ -138,26 +136,20 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Timber]: 1000, [ResourceEnum.Stone]: 500 },
         workforceCap: 2,
         baseOutput: { scholars: 2 },
-        requirement: { building: 'TownHall', level: 8 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'TownHall', level: 8 }
     },
 
-    ShadowGuild: {
-        id: 'ShadowGuild', name: 'Shadow Guild', displayName: 'Shadow Guild', tier: 3,
+    Watchtower: {
+        id: 'Watchtower', name: 'Watchtower', displayName: 'Watchtower', tier: 2,
         category: 'Military',
-        icon: 'fa-user-secret',
+        icon: 'fa-tower-observation',
         tags: ['military', 'espionage', 'intel'],
-        description: 'The hub of your intelligence network. Increases Spy Level and detection radius.',
-        growthFactor: 1.7,
-        baseCost: { [ResourceEnum.Timber]: 2000, [ResourceEnum.Stone]: 1500, [ResourceEnum.Gold]: 500 },
-        workforceCap: 5,
-        baseOutput: { spyLevel: 1 },
-        requirement: { building: 'Library', level: 5 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        description: 'A tall vantage point for sentries. Trains Scouts and Spies (Lvl 20). Increases Spy Level and detection radius.',
+        growthFactor: 1.5,
+        baseCost: { [ResourceEnum.Planks]: 200, [ResourceEnum.IronIngot]: 50 },
+        workforceCap: 3,
+        baseOutput: { spyLevel: 1, special: 'Trains Scouts and Spies' },
+        requirement: { building: 'TownHall', level: 5 }
     },
 
     ArcheryRange: {
@@ -169,10 +161,7 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Timber]: 400, [ResourceEnum.Planks]: 200 },
         workforceCap: 3,
         baseOutput: { special: 'Recruits Archers and Skirmishers' },
-        requirement: { building: 'TownHall', level: 5 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'TownHall', level: 5 }
     },
 
     SiegeWorkshop: {
@@ -184,40 +173,9 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Planks]: 1000, [ResourceEnum.IronIngot]: 500 },
         workforceCap: 5,
         baseOutput: { special: 'Recruits Mangonels and Trebuchets' },
-        requirement: { building: 'Smithy', level: 10 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'Barracks', level: 10 }
     },
 
-    Smithy: {
-        id: 'Smithy', name: 'Smithy', displayName: 'Smithy', tier: 3,
-        category: 'Industry',
-        tags: ['industry', 'processing', 'tools'],
-        description: 'A master workshop that converts Iron Ingots into Tools for high-level building maintenance.',
-        growthFactor: 1.4,
-        baseCost: { [ResourceEnum.Planks]: 1200, [ResourceEnum.IronIngot]: 600 },
-        workforceCap: 6,
-        baseOutput: { ratio: 3 },
-        requirement: { building: 'TownHall', level: 10 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
-    },
-    DeepMine: {
-        id: 'DeepMine', name: 'Ore Refinery', displayName: 'Ore Refinery', tier: 3,
-        category: 'Extraction',
-        tags: ['extraction', 'refinement', 'iron'],
-        description: 'Refines raw Stone into usable Iron Ingots by breaking down and processing rock.',
-        growthFactor: 1.7,
-        baseCost: { [ResourceEnum.Planks]: 1000 },
-        workforceCap: 10,
-        baseOutput: { ironPerHour: 150 },
-        requirement: { building: 'Smithy', level: 1 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
-    },
     CharcoalKiln: {
         id: 'CharcoalKiln', name: 'Charcoal Kiln', displayName: 'Charcoal Kiln', tier: 3,
         category: 'Industry',
@@ -227,10 +185,7 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Planks]: 800 },
         workforceCap: 3,
         baseOutput: { ratio: 2 },
-        requirement: { building: 'Bloomery', level: 5 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'Bloomery', level: 5 }
     },
     Tenements: {
         id: 'Tenements', name: 'Tenements', displayName: 'Tenements', tier: 3,
@@ -243,10 +198,7 @@ export const BUILDING_CONFIG = {
         baseOutput: { populationCap: 100 },
         housingBase: 0,
         housingPerLevel: 100,
-        requirement: { building: 'TownHall', level: 12 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'TownHall', level: 12 }
     },
 
     University: {
@@ -255,13 +207,10 @@ export const BUILDING_CONFIG = {
         tags: ['economy', 'research', 'knowledge'],
         description: 'The pinnacle of learning. Generates vast amounts of Knowledge and unlocks Tier 5 technologies.',
         growthFactor: 1.3,
-        baseCost: { [ResourceEnum.Planks]: 5000, [ResourceEnum.Tools]: 2000 },
+        baseCost: { [ResourceEnum.Planks]: 5000, [ResourceEnum.IronIngot]: 2000 },
         workforceCap: 5,
         baseOutput: { scholars: 5 },
-        requirement: { building: 'TownHall', level: 15 },
-        toolReqStartLevel: 1,
-        initialToolCost: { [ResourceEnum.Tools]: 1000 },
-        toolScaling: 1.3
+        requirement: { building: 'TownHall', level: 15 }
     },
     SteelWorks: {
         id: 'SteelWorks', name: 'Steel Works', displayName: 'Steel Works', tier: 4,
@@ -272,10 +221,7 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Planks]: 8000, [ResourceEnum.IronIngot]: 4000 },
         workforceCap: 12,
         baseOutput: { ratio: 5 },
-        requirement: { building: 'DeepMine', level: 1 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'Bloomery', level: 10 }
     },
     UrbanDistrict: {
         id: 'UrbanDistrict', name: 'Urban District', displayName: 'Urban District', tier: 4,
@@ -286,10 +232,7 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Planks]: 10000 },
         workforceCap: 0,
         baseOutput: { popCapMultiplierPercent: 10 },
-        requirement: { building: 'Tenements', level: 10 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'Tenements', level: 10 }
     },
 
     GoldShaft: {
@@ -301,10 +244,7 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Steel]: 15000 },
         workforceCap: 20,
         baseOutput: { goldOrePerHour: 20 },
-        requirement: { building: 'University', level: 10 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'University', level: 10 }
     },
     RoyalMint: {
         id: 'RoyalMint', name: 'Royal Mint', displayName: 'Royal Mint', tier: 5,
@@ -315,10 +255,7 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Steel]: 20000, [ResourceEnum.Stone]: 10000 },
         workforceCap: 8,
         baseOutput: { ratio: 10 },
-        requirement: { building: 'University', level: 12 },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { building: 'University', level: 12 }
     },
     CitadelWatch: {
         id: 'CitadelWatch', name: 'Citadel Watch', displayName: 'Citadel Watch', tier: 5,
@@ -329,25 +266,19 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Stone]: 50000, [ResourceEnum.Steel]: 10000 },
         workforceCap: 0,
         baseOutput: { special: 'Multi-Region Scouting' },
-        requirement: { quest: 'Great Ruin' },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        requirement: { quest: 'Great Ruin' }
     },
 
     Stable: {
         id: 'Stable', name: 'Stable', displayName: 'Stable', tier: 2,
         category: 'Military',
         tags: ['military', 'warfare'],
-        description: 'Breeds and houses Horses. Allows for the recruitment of Scouts and Knights.',
+        description: 'Breeds and houses Horses. Allows for the recruitment of Knights.',
         growthFactor: 1.2,
         baseCost: { [ResourceEnum.Planks]: 2000, [ResourceEnum.Stone]: 1000 },
         workforceCap: 2,
-        baseOutput: { special: 'Recruits Scouts and Knights' },
-        requirement: { items: { Horse: 1 } },
-        toolReqStartLevel: null,
-        initialToolCost: null,
-        toolScaling: null
+        baseOutput: { special: 'Recruits Knights' },
+        requirement: { items: { Horse: 1 } }
     }
 };
 

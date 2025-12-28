@@ -6,7 +6,7 @@ import { ResourceEnum } from '../constants/enums.js';
  * Calculates the cost to upgrade a building to the next level.
  * Implements Universal Formula + T3 Tools Bottleneck.
  * 
- * @param {string} buildingId - The ID of the building (e.g., 'DeepMine')
+ * @param {string} buildingId - The ID of the building (e.g., 'Bloomery')
  * @param {number} currentLevel - The current level of the building
  * @returns {Object} - Dictionary of resource costs
  */
@@ -129,7 +129,6 @@ export function calculateBuildTime(buildingId, currentLevel) {
         [ResourceEnum.Food]: 1,
         [ResourceEnum.Planks]: 4,
         [ResourceEnum.IronIngot]: 8,
-        [ResourceEnum.Tools]: 24,
         [ResourceEnum.Steel]: 40,
         [ResourceEnum.GoldIngot]: 100,
         [ResourceEnum.Knowledge]: 0
@@ -138,7 +137,6 @@ export function calculateBuildTime(buildingId, currentLevel) {
     const REFINING_PENALTY = {
         [ResourceEnum.Planks]: 0.5,
         [ResourceEnum.IronIngot]: 2,
-        [ResourceEnum.Tools]: 5,
         [ResourceEnum.Steel]: 10,
         [ResourceEnum.GoldIngot]: 5
     };

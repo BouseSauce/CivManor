@@ -107,11 +107,19 @@ export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parent
 
         // Update local area so child components receive fresh props
         setLocalArea(updated);
-        try { window.dispatchEvent(new CustomEvent('area:updated', { detail: { areaId: updated.id, resources: updated.resources, assignments: updated.assignments, idleReasons: updated.idleReasons || {}, units: updated.units } })); } catch (e) {}
+        try { window.dispatchEvent(new CustomEvent('area:updated', { detail: { areaId: updated.id, resources: updated.resources, assignments: updated.assignments, autoAssign: updated.autoAssign || {}, idleReasons: updated.idleReasons || {}, units: updated.units } })); } catch (e) {}
       } catch (e) { /* ignore */ }
     }, tickMs);
     return () => { mounted = false; clearInterval(id); };
   }, [localArea && localArea.id, lastActionAt]);
+
+  const filteredQueue = (localArea?.queue || []).filter(item => {
+    if (tab === 'buildings') return item.type === 'Building';
+    if (tab === 'military') return item.type === 'Unit';
+    return false; // Hide for research tab
+  });
+
+  const queueTitle = tab === 'military' ? 'Recruitment Ledger' : 'Construction Ledger';
 
   return (
     <div className="area-view" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -170,11 +178,22 @@ export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parent
       {/* Scrollable Content Area */}
       <div className="scroll-content" style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
         
-        {/* Construction Queue */}
-        {localArea?.queue && localArea.queue.length > 0 && (
+        {/* Relevant Queue */}
+        {filteredQueue.length > 0 && (
           <div style={{ marginBottom: '20px' }}>
+            <div className="font-cinzel" style={{ 
+              fontSize: '1.2rem', 
+              color: 'var(--accent-gold)', 
+              marginBottom: '10px',
+              textTransform: 'uppercase',
+              letterSpacing: '1px',
+              borderBottom: '1px solid var(--wood-dark)',
+              paddingBottom: '5px'
+            }}>
+              {queueTitle}
+            </div>
             <QueuePanel 
-              queue={localArea.queue} 
+              queue={filteredQueue} 
               onRefresh={refreshArea} 
               parentAreaId={localArea.id} 
             />
@@ -204,6 +223,7 @@ export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parent
             <MilitaryPanel 
               units={localArea?.units || []}
               buildings={(localArea?.buildings || []).filter(b => b.category === 'Military' || b.tags?.includes('military'))}
+              queue={localArea?.queue || []}
               onRecruit={onRecruit}
               onUpgrade={onUpgrade}
             />

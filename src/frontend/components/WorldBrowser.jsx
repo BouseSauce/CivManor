@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import HexGrid from './HexGrid';
 import { GameClient } from '../api/client';
 import { UnitTypeEnum } from '../../core/constants/enums';
+import { getUnitConfig } from '../../core/config/units.js';
 import EspionageModal from './EspionageModal';
 
 export default function WorldBrowser({ regions, onViewArea, onClaim, user, selectedAreaId, initialCenterId = null, onSendMessage, onSendSpy, onAttack }) {
@@ -15,6 +16,7 @@ export default function WorldBrowser({ regions, onViewArea, onClaim, user, selec
   const [activeMissions, setActiveMissions] = useState([]);
   const [espionageReports, setEspionageReports] = useState([]);
   const [nowTs, setNowTs] = useState(Date.now());
+  const MILITARY_KEYS = Object.keys(UnitTypeEnum).filter(k => !['Villager','Scholar'].includes(k));
 
   const loadEspionage = async () => {
     try {
@@ -164,8 +166,9 @@ export default function WorldBrowser({ regions, onViewArea, onClaim, user, selec
       target: area, 
       originId: defaultOrigin.id, 
       ownedAreas: owned,
-      units: { [UnitTypeEnum.Militia]: 0, [UnitTypeEnum.Villager]: 0 },
+      units: {},
       availableUnits: {},
+      showOnlySelected: true,
       loading: true 
     });
 
@@ -190,15 +193,16 @@ export default function WorldBrowser({ regions, onViewArea, onClaim, user, selec
 
   const handleSendSpy = async (area) => {
     closeOverlay();
-    // Find owned areas to pick origin
-    const owned = regions.flatMap(r => r.areas.filter(a => a.ownerId === user?.id));
-    if (owned.length === 0) {
-      alert('You must own an area with a Shadow Guild to send a spy.');
+    // Find owned areas with a Watchtower to pick origin
+    const ownedWithWatchtower = regions.flatMap(r => r.areas.filter(a => a.ownerId === user?.id && a.hasWatchtower));
+    
+    if (ownedWithWatchtower.length === 0) {
+      alert('You must own an area with a Watchtower to send a spy.');
       return;
     }
     
-    // Pick origin (prefer selectedAreaId if owned, else first owned)
-    const origin = owned.find(a => a.id === selectedAreaId) || owned[0];
+    // Pick origin (prefer selectedAreaId if owned and has watchtower, else first owned with watchtower)
+    const origin = ownedWithWatchtower.find(a => a.id === selectedAreaId) || ownedWithWatchtower[0];
     
     try {
       const resp = await GameClient.sendSpy(area.id, origin.id);
@@ -220,19 +224,38 @@ export default function WorldBrowser({ regions, onViewArea, onClaim, user, selec
     // Default origin to selectedAreaId if owned, else first owned
     const defaultOrigin = owned.find(a => a.id === selectedAreaId) || owned[0];
     
+    // Initialize units map for eligible unit types (exclude Villager/Scholar)
+    const eligibleUnitKeys = Object.keys(UnitTypeEnum).filter(k => !['Villager','Scholar'].includes(k));
+    const initUnits = eligibleUnitKeys.reduce((m, k) => { m[UnitTypeEnum[k]] = 0; return m; }, {});
+
     setAttackModal({ 
       target: area, 
       originId: defaultOrigin.id, 
       ownedAreas: owned,
-      units: { [UnitTypeEnum.Militia]: 0 },
+      units: initUnits,
       availableUnits: {},
-      loading: true 
+      loading: true,
+      sendAll: false,
+      showOnlySelected: false
     });
 
     // Fetch available units for the default origin
     try {
       const data = await GameClient.getArea(defaultOrigin.id);
-      const unitsMap = (data.units || []).reduce((m, u) => { m[u.type] = u.count; return m; }, {});
+      // Normalize units to mapping and ensure zero for missing unit types
+      let unitsMap = {};
+      if (Array.isArray(data.units)) {
+        data.units.forEach(u => { unitsMap[u.type] = u.count || 0; });
+      } else if (data.units && typeof data.units === 'object') {
+        unitsMap = Object.assign({}, data.units);
+      }
+
+      // Ensure eligible keys exist in both maps
+      eligibleUnitKeys.forEach(k => {
+        const key = UnitTypeEnum[k];
+        unitsMap[key] = unitsMap[key] || 0;
+      });
+
       setAttackModal(prev => ({ ...prev, availableUnits: unitsMap || {}, loading: false }));
     } catch (e) {
       console.error(e);
@@ -747,19 +770,65 @@ export default function WorldBrowser({ regions, onViewArea, onClaim, user, selec
               <div style={{ marginBottom: 16 }}>
                 <label className="font-cinzel" style={{ display: 'block', fontSize: '0.8rem', color: '#aaa' }}>Units to Send</label>
                 {attackModal.loading ? <div>Loading units...</div> : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-                    <i className="fa-solid fa-fist-raised" style={{ color: '#e0cda0' }}></i>
-                    <span style={{ flex: 1 }}>Militia (Available: {attackModal.availableUnits[UnitTypeEnum.Militia] || 0})</span>
-                    <input 
-                      type="number" 
-                      className="btn" 
-                      style={{ width: 80, background: '#000', color: '#fff' }}
-                      value={attackModal.units[UnitTypeEnum.Militia]}
-                      onChange={e => {
-                        const val = Math.max(0, Math.min(attackModal.availableUnits[UnitTypeEnum.Militia] || 0, parseInt(e.target.value) || 0));
-                        setAttackModal(prev => ({ ...prev, units: { ...prev.units, [UnitTypeEnum.Militia]: val } }));
-                      }}
-                    />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" checked={!!attackModal.sendAll} onChange={(e) => {
+                        const checked = !!e.target.checked;
+                        if (checked) {
+                          // copy availableUnits into units
+                          const all = {};
+                          MILITARY_KEYS.forEach(k => { const id = UnitTypeEnum[k]; all[id] = attackModal.availableUnits[id] || 0; });
+                          setAttackModal(prev => ({ ...prev, units: all, sendAll: true }));
+                        } else {
+                          const zeros = {}; MILITARY_KEYS.forEach(k => { zeros[UnitTypeEnum[k]] = 0; });
+                          setAttackModal(prev => ({ ...prev, units: zeros, sendAll: false }));
+                        }
+                      }} /> Send All Available
+                    </label>
+
+                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" checked={!!attackModal.showOnlySelected} onChange={(e) => {
+                        const checked = !!e.target.checked;
+                        setAttackModal(prev => ({ ...prev, showOnlySelected: checked }));
+                      }} /> Show Only Sent
+                    </label>
+
+                    <div style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 8 }}>
+                      {(() => {
+                        const visibleKeys = MILITARY_KEYS.filter(k => {
+                          if (!attackModal.showOnlySelected) return true;
+                          const id = UnitTypeEnum[k];
+                          return (attackModal.units && (attackModal.units[id] || 0) > 0);
+                        });
+                        if (visibleKeys.length === 0) return <div style={{ color: '#888' }}>No units selected to send.</div>;
+                        return visibleKeys.map(k => {
+                        const id = UnitTypeEnum[k];
+                        const cfg = getUnitConfig(id) || {};
+                        const avail = attackModal.availableUnits[id] || 0;
+                        const val = (attackModal.units && (attackModal.units[id] !== undefined)) ? attackModal.units[id] : 0;
+                        return (
+                          <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', fontSize: '0.9rem' }}>
+                            <i className={`fa-solid ${cfg.icon || 'fa-user'}`} style={{ color: '#e0cda0', width: 22, textAlign: 'center' }}></i>
+                            <span style={{ flex: 1, fontSize: '0.9rem' }}>{cfg.name || id} <small style={{ color: '#bbb' }}>(Available: {avail})</small></span>
+                            <input
+                              type="number"
+                              className="btn"
+                              style={{ width: 64, background: '#000', color: '#fff', padding: '4px 6px', fontSize: '0.9rem' }}
+                              value={val}
+                              onChange={e => {
+                                const v = Math.max(0, Math.min(avail, parseInt(e.target.value) || 0));
+                                setAttackModal(prev => ({ ...prev, units: { ...prev.units, [id]: v }, sendAll: false }));
+                              }}
+                            />
+                            <button className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={() => {
+                              const all = attackModal.availableUnits[id] || 0;
+                              setAttackModal(prev => ({ ...prev, units: { ...prev.units, [id]: all }, sendAll: false }));
+                            }}>All</button>
+                          </div>
+                        );
+                        });
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
@@ -768,7 +837,7 @@ export default function WorldBrowser({ regions, onViewArea, onClaim, user, selec
                 <button className="btn" onClick={() => setAttackModal(null)}>Cancel</button>
                 <button 
                   className="btn btn-danger" 
-                  disabled={attackModal.loading || attackModal.units[UnitTypeEnum.Militia] <= 0}
+                  disabled={attackModal.loading || (Object.values(attackModal.units || {}).reduce((a,b) => a + (Number(b)||0), 0) <= 0)}
                   onClick={async () => {
                     try {
                       const resp = await GameClient.attackArea(attackModal.originId, attackModal.target.id, attackModal.units);
@@ -836,34 +905,64 @@ export default function WorldBrowser({ regions, onViewArea, onClaim, user, selec
                 <label className="font-cinzel" style={{ display: 'block', fontSize: '0.8rem', color: '#aaa' }}>Units to Send</label>
                 {expeditionModal.loading ? <div>Loading units...</div> : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <i className="fa-solid fa-fist-raised" style={{ color: '#e0cda0' }}></i>
-                      <span style={{ flex: 1 }}>Militia (Available: {expeditionModal.availableUnits[UnitTypeEnum.Militia] || 0})</span>
-                      <input 
-                        type="number" 
-                        className="btn" 
-                        style={{ width: 80, background: '#000', color: '#fff' }}
-                        value={expeditionModal.units[UnitTypeEnum.Militia]}
-                        onChange={e => {
-                          const val = Math.max(0, Math.min(expeditionModal.availableUnits[UnitTypeEnum.Militia] || 0, parseInt(e.target.value) || 0));
-                          setExpeditionModal(prev => ({ ...prev, units: { ...prev.units, [UnitTypeEnum.Militia]: val } }));
-                        }}
-                      />
-                    </div>
+                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" checked={!!expeditionModal.sendAll} onChange={(e) => {
+                        const checked = !!e.target.checked;
+                        const EXPEDITION_KEYS = [...MILITARY_KEYS, 'Villager'];
+                        if (checked) {
+                          const all = {};
+                          EXPEDITION_KEYS.forEach(k => { const id = UnitTypeEnum[k]; all[id] = expeditionModal.availableUnits[id] || 0; });
+                          setExpeditionModal(prev => ({ ...prev, units: all, sendAll: true }));
+                        } else {
+                          const zeros = {}; EXPEDITION_KEYS.forEach(k => { zeros[UnitTypeEnum[k]] = 0; });
+                          setExpeditionModal(prev => ({ ...prev, units: zeros, sendAll: false }));
+                        }
+                      }} /> Send All Available
+                    </label>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <i className="fa-solid fa-person-digging" style={{ color: '#fff' }}></i>
-                      <span style={{ flex: 1 }}>Villagers (Available: {expeditionModal.availableUnits[UnitTypeEnum.Villager] || 0})</span>
-                      <input
-                        type="number"
-                        className="btn"
-                        style={{ width: 80, background: '#000', color: '#fff' }}
-                        value={expeditionModal.units[UnitTypeEnum.Villager]}
-                        onChange={e => {
-                          const val = Math.max(0, Math.min(expeditionModal.availableUnits[UnitTypeEnum.Villager] || 0, parseInt(e.target.value) || 0));
-                          setExpeditionModal(prev => ({ ...prev, units: { ...prev.units, [UnitTypeEnum.Villager]: val } }));
-                        }}
-                      />
+                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" checked={!!expeditionModal.showOnlySelected} onChange={(e) => {
+                        const checked = !!e.target.checked;
+                        setExpeditionModal(prev => ({ ...prev, showOnlySelected: checked }));
+                      }} /> Show Only Sent
+                    </label>
+
+                    <div style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 8 }}>
+                      {(() => {
+                        const EXPEDITION_KEYS = [...MILITARY_KEYS, 'Villager'];
+                        const visibleKeys = EXPEDITION_KEYS.filter(k => {
+                          if (!expeditionModal.showOnlySelected) return true;
+                          const id = UnitTypeEnum[k];
+                          return (expeditionModal.units && (expeditionModal.units[id] || 0) > 0);
+                        });
+                        if (visibleKeys.length === 0) return <div style={{ color: '#888' }}>No units selected to send.</div>;
+                        return visibleKeys.map(k => {
+                          const id = UnitTypeEnum[k];
+                          const cfg = getUnitConfig(id) || {};
+                          const avail = expeditionModal.availableUnits[id] || 0;
+                          const val = (expeditionModal.units && (expeditionModal.units[id] !== undefined)) ? expeditionModal.units[id] : 0;
+                          return (
+                            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', fontSize: '0.9rem' }}>
+                              <i className={`fa-solid ${cfg.icon || 'fa-user'}`} style={{ color: '#e0cda0', width: 22, textAlign: 'center' }}></i>
+                              <span style={{ flex: 1, fontSize: '0.9rem' }}>{cfg.name || id} <small style={{ color: '#bbb' }}>(Available: {avail})</small></span>
+                              <input
+                                type="number"
+                                className="btn"
+                                style={{ width: 64, background: '#000', color: '#fff', padding: '4px 6px', fontSize: '0.9rem' }}
+                                value={val}
+                                onChange={e => {
+                                  const v = Math.max(0, Math.min(avail, parseInt(e.target.value) || 0));
+                                  setExpeditionModal(prev => ({ ...prev, units: { ...prev.units, [id]: v }, sendAll: false }));
+                                }}
+                              />
+                              <button className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={() => {
+                                const all = expeditionModal.availableUnits[id] || 0;
+                                setExpeditionModal(prev => ({ ...prev, units: { ...prev.units, [id]: all }, sendAll: false }));
+                              }}>All</button>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
                 )}
@@ -873,7 +972,7 @@ export default function WorldBrowser({ regions, onViewArea, onClaim, user, selec
                 <button className="btn" onClick={() => setExpeditionModal(null)}>Cancel</button>
                 <button 
                   className="btn btn-primary" 
-                  disabled={expeditionModal.loading || ((expeditionModal.units[UnitTypeEnum.Militia] || 0) + (expeditionModal.units[UnitTypeEnum.Villager] || 0) <= 0)}
+                  disabled={expeditionModal.loading || (Object.values(expeditionModal.units || {}).reduce((a,b) => a + (Number(b)||0), 0) <= 0)}
                   onClick={async () => {
                     try {
                       await GameClient.launchExpedition(expeditionModal.originId, expeditionModal.target.id, expeditionModal.units);
@@ -898,6 +997,8 @@ export default function WorldBrowser({ regions, onViewArea, onClaim, user, selec
           onClose={() => setEspionageModal(null)}
           targetAreaId={espionageModal.id}
           targetName={espionageModal.name}
+          user={user}
+          regions={regions}
         />
       )}
     </div>

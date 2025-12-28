@@ -154,9 +154,26 @@ const AreaOverviewPanel = ({ areaId, areaName, coordinates, stats = {}, resource
             <div style={{ display: 'flex', gap: '12px', flex: 1, height: '100%' }}>
                 <div className="beveled-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', padding: '0 16px' }}>
                     <i className="fa-solid fa-users" style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}></i>
-                    <div>
+                    <div style={{ flex: 1 }}>
                         <div className="font-cinzel" style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', letterSpacing: '1.5px', fontWeight: 700 }}>POPULATION</div>
-                        <div className="font-garamond" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>{stats.currentPop} <span style={{ fontSize: '0.9rem', opacity: 0.7 }}>/ {stats.maxPop}</span></div>
+                        <div className="font-garamond" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                            <span>{stats.currentPop} <span style={{ fontSize: '0.9rem', opacity: 0.7 }}>/ {stats.maxPop}</span></span>
+                            {stats.nextVillagerSeconds !== null && stats.nextVillagerSeconds > 0 && (
+                                <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', opacity: 0.9 }}>
+                                    (Next: {stats.nextVillagerSeconds > 60 ? `${Math.floor(stats.nextVillagerSeconds / 60)}m ${stats.nextVillagerSeconds % 60}s` : `${stats.nextVillagerSeconds}s`})
+                                </span>
+                            )}
+                        </div>
+                        {/* Growth Progress Bar */}
+                        <div style={{ width: '100%', height: '4px', background: 'rgba(0,0,0,0.3)', marginTop: '4px', borderRadius: '2px', title: `Growth Progress: ${Math.round((stats.popGrowRemainder || 0) * 100)}%` }}>
+                            <div style={{ 
+                                width: `${Math.min(100, Math.max(0, (stats.popGrowRemainder || 0) * 100))}%`, 
+                                height: '100%', 
+                                background: 'var(--accent-gold)', 
+                                borderRadius: '2px',
+                                transition: 'width 0.5s ease'
+                            }}></div>
+                        </div>
                     </div>
                 </div>
 

@@ -7,6 +7,7 @@ import MilitaryPanel from './MilitaryPanel';
 import IndustryPanel from './IndustryPanel';
 import GatheringPanel from './GatheringPanel';
 import EconomyPanel from './EconomyPanel';
+import IncomingAttackWarning from './IncomingAttackWarning';
 import { GameClient } from '../api/client';
 
 export default function CityView({ area, onBack, onUpgrade, onRecruit, onRefresh, openResearchModal }) {
@@ -42,9 +43,22 @@ export default function CityView({ area, onBack, onUpgrade, onRecruit, onRefresh
     return () => { mounted = false; clearInterval(id); };
   }, [area && area.id, onRefresh, lastActionAt]);
 
+  const filteredQueue = (area.queue || []).filter(item => {
+    if (tab === 'military') return item.type === 'Unit';
+    return item.type === 'Building';
+  });
+
+  const queueTitle = tab === 'military' ? 'Recruitment Ledger' : 'Construction Ledger';
+
   return (
     <div className="city-view" style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', backgroundImage: 'url(https://www.transparenttextures.com/patterns/aged-paper.png)', backgroundColor: '#efe6d6', fontFamily: 'Medieval Serif, serif' }}>
       <AreaHeaderBar resources={{ ...area.resources }} stats={area.stats} />
+      
+      <IncomingAttackWarning 
+        proximityAlerts={area.proximityAlerts} 
+        areaId={area.id} 
+        onScoutStarted={onRefresh} 
+      />
 
       <div style={{ display: 'flex', flex: 1, gap: 16, padding: 20, boxSizing: 'border-box' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -77,9 +91,9 @@ export default function CityView({ area, onBack, onUpgrade, onRecruit, onRefresh
         </div>
 
         <div style={{ width: 340, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'stretch', justifyContent: 'flex-start' }}>
-          <div style={{ fontWeight: 700 }}>Construction Ledger</div>
+          <div style={{ fontWeight: 700 }}>{queueTitle}</div>
           <div style={{ flex: '0 0 auto' }}>
-            <QueuePanel queue={area.queue || []} onRefresh={onRefresh} parentAreaId={area.id} />
+            <QueuePanel queue={filteredQueue} onRefresh={onRefresh} parentAreaId={area.id} />
           </div>
           <div style={{ position: 'fixed', left: 18, bottom: 18, zIndex: 200, display: 'flex', alignItems: 'center' }}>
             <div className="leather-strap"></div>

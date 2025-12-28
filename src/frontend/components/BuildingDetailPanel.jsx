@@ -212,21 +212,33 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
     setUpgradeLoading(false);
   }, [_b.id]);
 
-  // Per-building persistent auto-assign flag (stored in localStorage as `autoAssign:{areaId}:{buildingId}`)
-  const storageKeyForAuto = (() => {
-    try { const aid = area && area.id ? area.id : (typeof window !== 'undefined' && window.gameState ? window.gameState.activeAreaID : null); return aid && _b && _b.id ? `autoAssign:${aid}:${_b.id}` : null; } catch(e) { return null; }
-  })();
-  const [autoAssignEnabled, setAutoAssignEnabledRaw] = useState(() => {
-    try {
-      if (!storageKeyForAuto) return false;
-      const v = typeof window !== 'undefined' ? window.localStorage.getItem(storageKeyForAuto) : null;
-      return v === '1' || v === 'true';
-    } catch (e) { return false; }
-  });
+  // Per-building persistent auto-assign flag (stored on server)
+  const [localAutoAssign, setLocalAutoAssign] = useState(!!(area && area.autoAssign && area.autoAssign[_b.id]));
 
-  const setAutoAssignEnabled = (val) => {
-    try { if (storageKeyForAuto && typeof window !== 'undefined') window.localStorage.setItem(storageKeyForAuto, val ? '1' : '0'); } catch(e){}
-    setAutoAssignEnabledRaw(!!val);
+  useEffect(() => {
+    setLocalAutoAssign(!!(area && area.autoAssign && area.autoAssign[_b.id]));
+  }, [area?.autoAssign, _b.id]);
+
+  const setAutoAssignEnabled = async (val) => {
+    const nextVal = !!val;
+    setLocalAutoAssign(nextVal);
+    try {
+      await api.toggleAutoAssign(area.id, _b.id, nextVal);
+      // Also dispatch to notify other components
+      if (area && area.id) {
+        const updatedAutoAssign = Object.assign({}, area.autoAssign || {}, { [_b.id]: nextVal });
+        window.dispatchEvent(new CustomEvent('area:updated', { 
+          detail: { 
+            areaId: area.id, 
+            autoAssign: updatedAutoAssign 
+          } 
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to toggle auto-assign:', e);
+      // Revert on failure
+      setLocalAutoAssign(!!(area && area.autoAssign && area.autoAssign[_b.id]));
+    }
   };
 
   // Derived pieces moved outside JSX for clearer reconciliation
@@ -325,25 +337,45 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
     return () => clearInterval(id);
   }, [upgradeSecs]);
 
-  // Auto-assign logic
-  useEffect(() => {
-    if (autoAssignEnabled && localAssigned < maxAssigned && !isEditing && !isDirty) {
-      const villagersCount = (liveArea && Array.isArray(liveArea.units))
-        ? (((liveArea.units.find(u => u.type === 'Villager') || {}).count) ?? 0)
-        : (liveArea && liveArea.stats && typeof liveArea.stats.currentPop === 'number')
-          ? liveArea.stats.currentPop
-          : ((liveArea && typeof liveArea.population === 'number') ? liveArea.population : 0);
-      
-      const totalAssignedInArea = Object.entries(areaAssignments).reduce((acc, [k, v]) => acc + (v || 0), 0);
-      const idleCount = Math.max(0, villagersCount - totalAssignedInArea);
+  // Helper: compute debug production UI outside of JSX to avoid try/catch inside render
+  const computeDebugProductionUI = () => {
+    try {
+      const lvl = _b.level || 0;
+      const assigned = (!isDirty && !isEditing) ? (serverAssignedMain || 0) : (localAssigned || 0);
+      const resources = [];
+      const perWorker = computeTotalProductionExtraction(_b.id, lvl) || {};
+      Object.keys(perWorker).forEach(k => {
+        let base = null;
+        if (k.toLowerCase().includes('timber')) base = PRODUCTION_RATES.timberPerWorkerPerSecond;
+        if (k.toLowerCase().includes('food')) base = PRODUCTION_RATES.foodPerWorkerPerSecond;
+        if (k.toLowerCase().includes('plank')) base = PRODUCTION_RATES.planksPerWorkerPerSecond;
+        if (k.toLowerCase().includes('stone')) base = PRODUCTION_RATES.stonePitPerWorkerPerSecond;
+        const workerFactor = Math.pow(Math.max(1, assigned), WORKER_EXP || 1);
+        const levelMul = Math.pow(PRODUCTION_GROWTH || 1, Math.max(0, lvl - 1));
+        const mul = (PRODUCTION_GLOBAL_MULTIPLIER || 1);
+        const perSecond = base ? (base * workerFactor * levelMul * mul) : (Number(perWorker[k] || 0) / 3600 * Math.max(1, assigned));
+        const perHour = perSecond * 3600;
+        resources.push({ name: k, base, workerFactor, levelMul, mul, perSecond, perHour, assigned });
+      });
 
-      const next = Math.min(maxAssigned, idleCount + localAssigned);
-      if (next > localAssigned) {
-        setLocalAssigned(next);
-        setIsDirty(true);
-      }
+      const idleReason = (localIdleReasons && localIdleReasons[_b.id]) || (area && area.idleReasons && area.idleReasons[_b.id]) || null;
+
+      return resources.map(r => (
+        <div key={r.name} style={{ marginBottom: 8 }}>
+          <div style={{ fontWeight: 800 }}>{r.name}</div>
+          <div>Assigned: {r.assigned}</div>
+          {idleReason && <div style={{ color: theme.red }}>Idle reason: {idleReason}</div>}
+          <div>BaseRate/sec: {r.base != null ? r.base : 'N/A'}</div>
+          <div>Worker factor: {Number(r.workerFactor).toFixed(6)}</div>
+          <div>Level multiplier: {Number(r.levelMul).toFixed(6)}</div>
+          <div>Global multiplier: {Number(r.mul).toFixed(3)}</div>
+          <div style={{ marginTop: 4, fontWeight: 700 }}>{Number(r.perHour).toFixed(2)} /hr ({Number(r.perSecond).toFixed(6)} /s)</div>
+        </div>
+      ));
+    } catch (e) {
+      return <div>Debug compute error</div>;
     }
-  }, [autoAssignEnabled, maxAssigned, isEditing, isDirty, liveArea]);
+  };
 
   // Production details removed — cards and detail view will no longer show per-hour production values.
 
@@ -378,28 +410,180 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
           Storage Capacity
         </h4>
         <div style={resourceGridStyle}>
-          {Object.entries(storehouseCapacities).map(([res, cap]) => {
-            const def = getIconForResource(res) || { icon: 'fa-box', color: '#bbb' };
-            const current = (area?.resources?.[res] !== undefined)
-              ? Math.floor(area.resources[res])
-              : (_b && _b.storage && typeof _b.storage[res] !== 'undefined')
-                ? Math.floor(_b.storage[res])
-                : (_b && _b.resources && typeof _b.resources[res] !== 'undefined')
-                  ? Math.floor(_b.resources[res])
-                  : 0;
-            const atCapacity = current >= cap;
-            return (
-              <div key={res} style={resourceBadgeStyle}>
-                <i className={"fa-solid " + def.icon} style={{ color: atCapacity ? theme.red : theme.gold }}></i>
+          {(() => {
+            const entries = Object.entries(storehouseCapacities).map(([res, cap]) => {
+              const def = getIconForResource(res) || { icon: 'fa-box', color: '#bbb' };
+              const current = (area?.resources?.[res] !== undefined)
+                ? Math.floor(area.resources[res])
+                : (_b && _b.storage && typeof _b.storage[res] !== 'undefined')
+                  ? Math.floor(_b.storage[res])
+                  : (_b && _b.resources && typeof _b.resources[res] !== 'undefined')
+                    ? Math.floor(_b.resources[res])
+                    : 0;
+              const atCapacity = current >= cap;
+              return { res, cap, def, current, atCapacity };
+            }).filter(e => e.current > 0);
+
+            if (entries.length === 0) {
+              return <div style={{ color: theme.textMuted, fontStyle: 'italic' }}>Empty</div>;
+            }
+
+            return entries.map(e => (
+              <div key={e.res} style={resourceBadgeStyle}>
+                <i className={"fa-solid " + e.def.icon} style={{ color: e.atCapacity ? theme.red : theme.gold }}></i>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '0.85rem', color: atCapacity ? theme.red : theme.textMain }}>
-                    {current.toLocaleString()} / {cap.toLocaleString()}
+                  <span style={{ fontSize: '0.85rem', color: e.atCapacity ? theme.red : theme.textMain }}>
+                    {e.current.toLocaleString()} / {e.cap.toLocaleString()}
                   </span>
-                  <span style={{ fontSize: '0.65rem', color: theme.textMuted, textTransform: 'capitalize' }}>{res}</span>
+                  <span style={{ fontSize: '0.65rem', color: theme.textMuted, textTransform: 'capitalize' }}>{e.res}</span>
                 </div>
               </div>
-            );
-          })}
+            ));
+          })()}
+        </div>
+      </div>
+    );
+  };
+
+  const renderTownHallControls = () => {
+    if (_b.id !== 'TownHall' || notBuilt) return null;
+    
+    const rationLevel = (area && area.stats && typeof area.stats.rationLevel === 'number') ? area.stats.rationLevel : 2;
+    const upgrades = (area && area.buildingUpgrades && area.buildingUpgrades['TownHall']) || [];
+    const availableUpgrades = (BUILDING_CONFIG['TownHall'] && BUILDING_CONFIG['TownHall'].civicUpgrades) || [];
+
+    const setRationLevel = async (lvl) => {
+        try {
+            const areaId = area && area.id ? area.id : (window.gameState && window.gameState.activeAreaID);
+            if (!areaId) return;
+            await GameClient.setRationLevel(areaId, lvl);
+            // Refresh
+            try { window.dispatchEvent(new CustomEvent('area:refresh-request', { detail: { areaId } })); } catch (e) {}
+        } catch (e) {
+            alert('Failed to set ration level');
+        }
+    };
+
+    const buyUpgrade = async (upgId) => {
+        try {
+            const areaId = area && area.id ? area.id : (window.gameState && window.gameState.activeAreaID);
+            if (!areaId) return;
+            await GameClient.buyCivicUpgrade(areaId, 'TownHall', upgId);
+            // Refresh
+            try { window.dispatchEvent(new CustomEvent('area:refresh-request', { detail: { areaId } })); } catch (e) {}
+        } catch (e) {
+            alert(e.message || 'Failed to buy upgrade');
+        }
+    };
+
+    return (
+      <div style={sectionStyle}>
+        <h4 style={{ margin: '0 0 15px 0', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '1.5px', color: theme.accentGold, fontWeight: 900, borderBottom: `1px solid ${theme.border}`, paddingBottom: 8 }}>
+          <i className="fas fa-wheat-awn" style={{ marginRight: 8 }}></i> Population Management
+        </h4>
+
+        {/* Ration Level */}
+        <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: theme.textMuted, marginBottom: 8 }}>RATION LEVEL</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                    { lvl: 0, label: 'None', desc: 'Starvation (-50 Approval)' },
+                    { lvl: 1, label: 'Half', desc: 'No Growth (-10 Approval)' },
+                    { lvl: 2, label: 'Normal', desc: 'Standard Growth' },
+                    { lvl: 3, label: 'Double', desc: 'Double Growth (+10 Approval)' }
+                ].map(opt => (
+                    <button 
+                        key={opt.lvl}
+                        onClick={() => setRationLevel(opt.lvl)}
+                        style={{
+                            flex: 1,
+                            padding: '8px',
+                            background: rationLevel === opt.lvl ? theme.gold : 'rgba(255,255,255,0.05)',
+                            color: rationLevel === opt.lvl ? '#000' : theme.textMain,
+                            border: `1px solid ${rationLevel === opt.lvl ? theme.gold : 'rgba(255,255,255,0.1)'}`,
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                            fontSize: '0.8rem'
+                        }}
+                        title={opt.desc}
+                    >
+                        {opt.label}
+                    </button>
+                ))}
+            </div>
+            <div style={{ marginTop: 4, fontSize: '0.7rem', color: theme.textMuted, textAlign: 'center' }}>
+                {[
+                    { lvl: 0, desc: 'Starvation (-50 Approval)' },
+                    { lvl: 1, desc: 'No Growth (-10 Approval)' },
+                    { lvl: 2, desc: 'Standard Growth' },
+                    { lvl: 3, desc: 'Double Growth (+10 Approval)' }
+                ].find(o => o.lvl === rationLevel)?.desc}
+            </div>
+            {liveArea && liveArea.stats && liveArea.stats.nextVillagerSeconds !== null && (
+                <div style={{ marginTop: 12, padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: 4, textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.65rem', color: theme.accentGold, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}>Next Villager Arrival</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: theme.textMain }}>
+                        {liveArea.stats.nextVillagerSeconds > 60 
+                            ? `${Math.floor(liveArea.stats.nextVillagerSeconds / 60)}m ${liveArea.stats.nextVillagerSeconds % 60}s` 
+                            : `${liveArea.stats.nextVillagerSeconds}s`}
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: theme.textMuted, marginTop: 2 }}>
+                        Growth Rate: {Number(liveArea.stats.growthPerHour || 0).toFixed(2)} / hr
+                    </div>
+                </div>
+            )}
+        </div>
+
+        {/* Civic Upgrades */}
+        <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: theme.textMuted, marginBottom: 8 }}>CIVIC UPGRADES</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {availableUpgrades.map(u => {
+                    const owned = upgrades.includes(u.id);
+                    const canAfford = !owned && Object.entries(u.cost).every(([r, amt]) => (area?.resources?.[r] || 0) >= amt);
+                    
+                    return (
+                        <div key={u.id} style={{ 
+                            padding: '10px', 
+                            background: owned ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255,255,255,0.03)', 
+                            border: `1px solid ${owned ? '#4caf50' : 'rgba(255,255,255,0.1)'}`,
+                            borderRadius: 6,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <div>
+                                <div style={{ fontWeight: 700, color: owned ? '#4caf50' : theme.textMain }}>{u.name} {owned && <i className="fas fa-check-circle"></i>}</div>
+                                <div style={{ fontSize: '0.7rem', color: theme.textMuted }}>{u.description}</div>
+                                {!owned && (
+                                    <div style={{ fontSize: '0.7rem', color: theme.textMuted, marginTop: 4 }}>
+                                        Cost: {Object.entries(u.cost).map(([r, a]) => `${a} ${r}`).join(', ')}
+                                    </div>
+                                )}
+                            </div>
+                            {!owned && (
+                                <button 
+                                    onClick={() => buyUpgrade(u.id)}
+                                    disabled={!canAfford}
+                                    style={{
+                                        padding: '4px 8px',
+                                        background: canAfford ? theme.gold : '#555',
+                                        color: canAfford ? '#000' : '#888',
+                                        border: 'none',
+                                        borderRadius: 4,
+                                        cursor: canAfford ? 'pointer' : 'not-allowed',
+                                        fontWeight: 700,
+                                        fontSize: '0.75rem'
+                                    }}
+                                >
+                                    Buy
+                                </button>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
         </div>
       </div>
     );
@@ -460,7 +644,7 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
           </h4>
           <LeverToggle 
             label="Auto-Assign" 
-            checked={autoAssignEnabled} 
+            checked={localAutoAssign} 
             onChange={setAutoAssignEnabled} 
           />
         </div>
@@ -520,7 +704,7 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
 
   const renderUnitProduction = () => {
     // Show on military production buildings and research buildings for Scholars
-    const productionBuildings = ['Barracks', 'ArcheryRange', 'SiegeWorkshop', 'Stable', 'Library', 'University', 'TownHall', 'ShadowGuild'];
+    const productionBuildings = ['Barracks', 'ArcheryRange', 'SiegeWorkshop', 'Stable', 'Library', 'University', 'TownHall', 'Watchtower'];
     if (!productionBuildings.includes(_b.id)) return null;
     
     // Determine candidate units (filter by building requirement)
@@ -946,6 +1130,7 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
         <div style={{ maxHeight: '50vh', overflowY: 'auto' }}>
           {renderStorage()}
           {renderAssignments()}
+          {renderTownHallControls()}
           
           {/* Base Output Section (if applicable) */}
           {BUILDING_CONFIG[_b.id]?.baseOutput && !(['Storehouse'].includes(_b.id)) && (
@@ -987,36 +1172,6 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
                       }
 
                       if (typeof v !== 'number') {
-                        // SurfaceMine special-case: compute using stonePitPerWorkerPerSecond
-                        if (_b.id === 'SurfaceMine') {
-                          const baseRate = PRODUCTION_RATES.stonePitPerWorkerPerSecond || 0.06;
-                          // If storage-limited or no assigned workers, production should be 0
-                          if (storageLimited || (assignedWorkers || 0) <= 0) {
-                            const totalHour = 0;
-                            const effectivePerWorker = 0;
-                            return (
-                              <div key={k} style={resourceBadgeStyle}>
-                                <i className={`fas ${getResourceIcon(ResourceEnum.Stone)}`} style={{ color: theme.gold }} />
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>{totalHour.toFixed(2)}</span>
-                                  <span style={{ fontSize: '0.75rem', color: theme.textMuted }}>{effectivePerWorker.toFixed(2)} /hr (per worker)</span>
-                                </div>
-                              </div>
-                            );
-                          }
-                          const totalHour = computeHourly(baseRate, _b.level || 0, Math.max(1, assignedWorkers));
-                          const effectivePerWorker = assignedWorkers > 0 ? (totalHour / Math.max(1, assignedWorkers)) : computeHourly(baseRate, _b.level || 0, 1);
-                          return (
-                            <div key={k} style={resourceBadgeStyle}>
-                              <i className={`fas ${getResourceIcon(ResourceEnum.Stone)}`} style={{ color: theme.gold }} />
-                              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>{totalHour.toFixed(2)}</span>
-                                <span style={{ fontSize: '0.75rem', color: theme.textMuted }}>{effectivePerWorker.toFixed(2)} /hr (per worker)</span>
-                              </div>
-                            </div>
-                          );
-                        }
-
                         // Fallback: show the raw string
                         return (
                           <div key={k} style={resourceBadgeStyle}>
@@ -1085,57 +1240,7 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
               <details>
                 <summary style={{ cursor: 'pointer', fontWeight: 700, color: 'var(--text-muted)' }}>Debug: computed production (server math)</summary>
                 <div style={{ marginTop: 8 }}>
-                  {(() => {
-                    try {
-                      const lvl = _b.level || 0;
-                      const assigned = (!isDirty && !isEditing) ? (serverAssignedMain || 0) : (localAssigned || 0);
-                      const resources = [];
-                      // Decide which base rate to use for this building
-                      if (_b.id === 'SurfaceMine') {
-                        const base = PRODUCTION_RATES.stonePitPerWorkerPerSecond || 0.06;
-                        const workerFactor = Math.pow(Math.max(1, assigned), WORKER_EXP || 1);
-                        const levelMul = Math.pow(PRODUCTION_GROWTH || 1, Math.max(0, lvl - 1));
-                        const mul = (PRODUCTION_GLOBAL_MULTIPLIER || 1);
-                        const perSecond = base * workerFactor * levelMul * mul;
-                        const perHour = perSecond * 3600;
-                        resources.push({ name: 'Stone', base, workerFactor, levelMul, mul, perSecond, perHour, assigned });
-                      } else {
-                        // For other config-driven numeric outputs, gather keys from computeTotalProductionExtraction
-                        const perWorker = computeTotalProductionExtraction(_b.id, lvl) || {};
-                        Object.keys(perWorker).forEach(k => {
-                          // Try to find matching PRODUCTION_RATES key
-                          const key = k.replace(/PerHour/i, '').replace(/([A-Z])/g, c => c).toLowerCase();
-                          // Best-effort mapping
-                          let base = null;
-                          if (k.toLowerCase().includes('timber')) base = PRODUCTION_RATES.timberPerWorkerPerSecond;
-                          if (k.toLowerCase().includes('food')) base = PRODUCTION_RATES.foodPerWorkerPerSecond;
-                          if (k.toLowerCase().includes('plank')) base = PRODUCTION_RATES.planksPerWorkerPerSecond;
-                          if (k.toLowerCase().includes('stone')) base = PRODUCTION_RATES.stonePitPerWorkerPerSecond;
-                          if (base == null) base = null;
-                          const workerFactor = Math.pow(Math.max(1, assigned), WORKER_EXP || 1);
-                          const levelMul = Math.pow(PRODUCTION_GROWTH || 1, Math.max(0, lvl - 1));
-                          const mul = (PRODUCTION_GLOBAL_MULTIPLIER || 1);
-                          const perSecond = base ? (base * workerFactor * levelMul * mul) : (Number(perWorker[k] || 0) / 3600 * Math.max(1, assigned));
-                          const perHour = perSecond * 3600;
-                          resources.push({ name: k, base, workerFactor, levelMul, mul, perSecond, perHour, assigned });
-                        });
-                      }
-
-                      const idleReason = (localIdleReasons && localIdleReasons[_b.id]) || (area && area.idleReasons && area.idleReasons[_b.id]) || null;
-                      return resources.map(r => (
-                        <div key={r.name} style={{ marginBottom: 8 }}>
-                          <div style={{ fontWeight: 800 }}>{r.name}</div>
-                          <div>Assigned: {r.assigned}</div>
-                          {idleReason && <div style={{ color: theme.red }}>Idle reason: {idleReason}</div>}
-                          <div>BaseRate/sec: {r.base != null ? r.base : 'N/A'}</div>
-                          <div>Worker factor: {Number(r.workerFactor).toFixed(6)}</div>
-                          <div>Level multiplier: {Number(r.levelMul).toFixed(6)}</div>
-                          <div>Global multiplier: {Number(r.mul).toFixed(3)}</div>
-                          <div style={{ marginTop: 4, fontWeight: 700 }}>{Number(r.perHour).toFixed(2)} /hr ({Number(r.perSecond).toFixed(6)} /s)</div>
-                        </div>
-                      ));
-                    } catch (e) { return <div>Debug compute error</div>; }
-                  })()}
+                  {computeDebugProductionUI()}
                 </div>
               </details>
             </div>

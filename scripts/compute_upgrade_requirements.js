@@ -42,7 +42,7 @@ function fmt(n) { return typeof n === 'number' ? Math.round(n*100)/100 : n; }
   state.buildings['Farm'] = 4; state.assignments['Farm'] = 9;
   state.buildings['LoggingCamp'] = 4; state.assignments['LoggingCamp'] = 9;
   state.buildings['StonePit'] = 3; state.assignments['StonePit'] = 7;
-  state.buildings['DeepMine'] = 2; state.assignments['DeepMine'] = 6;
+  state.buildings['Bloomery'] = 2; state.assignments['Bloomery'] = 6;
   state.buildings['Storehouse'] = 3; state.buildings['TownHall'] = 3;
 
   // baseline resources

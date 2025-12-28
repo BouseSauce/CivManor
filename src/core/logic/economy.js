@@ -18,7 +18,7 @@ export const SUSTENANCE_PER_POP_PER_SECOND = 1 / 3600; // 1 food per citizen per
  * @param {boolean} hasFirewood - If firewood requirement is met
  * @returns {number} - Approval percentage (0-100)
  */
-export function calculateApproval(pop, capacity, foodVariety, taxRate, hasFirewood, prevApproval = null) {
+export function calculateApproval(pop, capacity, foodVariety, taxRate, hasFirewood, prevApproval = null, rationLevel = 2) {
     let approval = 50; // Base approval
 
     // 1. Homelessness Penalty (scaled and much less punishing)
@@ -45,10 +45,15 @@ export function calculateApproval(pop, capacity, foodVariety, taxRate, hasFirewo
         approval += 5; // Comfort bonus
     }
 
+    // 5. Ration Level Impact
+    if (rationLevel === 0) approval -= 50;
+    else if (rationLevel === 1) approval -= 10;
+    else if (rationLevel === 3) approval += 10;
+
     // Compute raw clamped value before applying rate-limiting
     let clamped = Math.max(0, Math.min(100, Math.floor(approval)));
 
-    // 5. Rate limit adjustment: if previous approval provided, limit change to +/-2 per recalculation
+    // 6. Rate limit adjustment: if previous approval provided, limit change to +/-2 per recalculation
     if (typeof prevApproval === 'number' && !isNaN(prevApproval)) {
         const delta = clamped - prevApproval;
         if (delta > 2) clamped = prevApproval + 2;
@@ -87,10 +92,18 @@ export function calculateTaxIncome(pop, taxRate, townHallLevel = 0) {
  * @param {number} growthMultiplier - Multiplier for population growth (default 1.0)
  * @returns {Object} - { newPop, consumedFood, starvationDeaths }
  */
-export function processPopulationTick(pop, foodStocks, approval, townHallLevel = 1, housingCap = 100, captives = 0, seconds = 1, stateObj = null, growthMultiplier = 1.0) {
+export function processPopulationTick(pop, foodStocks, approval, townHallLevel = 1, housingCap = 100, captives = 0, seconds = 1, stateObj = null, growthMultiplier = 1.0, rationLevel = 2) {
     // 1. Calculate Total Sustenance Needed
     // Each villager consumes `SUSTENANCE_PER_POP_PER_SECOND` sustenance units per tick (tick = 1s)
-    const sustenanceNeeded = (pop * SUSTENANCE_PER_POP_PER_SECOND) + (captives * (0.5 / 3600));
+    const baseNeed = (pop * SUSTENANCE_PER_POP_PER_SECOND) + (captives * (0.5 / 3600));
+    
+    let targetMultiplier = 1.0;
+    if (rationLevel === 0) targetMultiplier = 0;
+    else if (rationLevel === 1) targetMultiplier = 0.5;
+    else if (rationLevel === 3) targetMultiplier = 2.0;
+
+    const sustenanceNeeded = baseNeed * targetMultiplier;
+    
     let sustenanceAvailable = 0;
     
     // Calculate available sustenance from stocks
@@ -104,7 +117,12 @@ export function processPopulationTick(pop, foodStocks, approval, townHallLevel =
     const consumedFood = {}; // Track what was eaten
 
     // 2. Starvation Logic
-    if (sustenanceAvailable <= 0) {
+    if (rationLevel === 0) {
+        // Force starvation as if 0 food was eaten, but calculate deaths based on full need
+        const deathsPerHour = 0.01; // 1% per hour
+        starvationDeaths = Math.floor(pop * deathsPerHour * (seconds / 3600));
+        newPop -= starvationDeaths;
+    } else if (sustenanceAvailable <= 0) {
         // No food at all: apply starvation death at 1% per hour scaled to tick seconds
         const deathsPerHour = 0.01; // 1% per hour
         starvationDeaths = Math.floor(pop * deathsPerHour * (seconds / 3600));
@@ -167,9 +185,14 @@ export function processPopulationTick(pop, foodStocks, approval, townHallLevel =
         } catch (e) { /* ignore */ }
 
         let growthPerHour = baseRatePerHour * approvalModifier * POP_GROWTH_MULTIPLIER * growthMultiplier * researchTimerMultiplier;
+        
+        // Ration Level Growth Modifiers
+        if (rationLevel === 1) growthPerHour = 0; // Half rations = 0 growth
+        else if (rationLevel === 3) growthPerHour *= 2; // Double rations = double growth
+
         // If the area has sufficient sustenance, ensure a minimum growth rate so players see progress.
         try {
-            if (sustenanceAvailable >= sustenanceNeeded) {
+            if (sustenanceAvailable >= sustenanceNeeded && rationLevel >= 2) {
                 const MIN_GROWTH_PER_HOUR = 5; // ensure at least +5 villagers per hour when fed
                 growthPerHour = Math.max(growthPerHour, MIN_GROWTH_PER_HOUR);
             }
@@ -204,6 +227,7 @@ export function processPopulationTick(pop, foodStocks, approval, townHallLevel =
         newPop,
         consumedFood,
         starvationDeaths,
-        captiveDeaths
+        captiveDeaths,
+        growthPerHour
     };
 }

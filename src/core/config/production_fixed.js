@@ -14,8 +14,9 @@ PRODUCTION_RATES.planksPerWorkerPerSecond = 0.005;
 PRODUCTION_RATES.ingotPerWorkerPerSecond = 0.002;
 PRODUCTION_RATES.coalPerWorkerPerSecond = 0.01;
 PRODUCTION_RATES.steelPerWorkerPerSecond = 0.001;
-// Refinery (Deep Mine) produces refined iron directly from Stone per level
-PRODUCTION_RATES.refineryIngotPerLevelPerSecond = 0.02;
+PRODUCTION_RATES.knowledgePerWorkerPerSecond = 0.1;
+PRODUCTION_RATES.intelPerWorkerPerSecond = 0.05;
+PRODUCTION_RATES.militaryIntelPerWorkerPerSecond = 0.02;
 
 // Compounding growth per level: each level multiplies previous output by 1.2
 export const PRODUCTION_GROWTH = 1.2;

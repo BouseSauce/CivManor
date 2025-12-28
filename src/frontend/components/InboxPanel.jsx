@@ -56,13 +56,13 @@ export default function InboxPanel({ onClose }) {
   };
 
   return (
-    <div className="medieval-panel" style={{ flex: 1 }}>
-      <div className="panel-title">
+    <div className="medieval-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="panel-title" style={{ flexShrink: 0 }}>
         <span>Royal Messenger</span>
         <i className="fa-solid fa-envelope"></i>
       </div>
-      <div style={{ padding: 12 }}>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <div style={{ padding: 12, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexShrink: 0 }}>
           <button className={`btn-medieval ${tab==='inbox'?'active':''}`} onClick={() => setTab('inbox')} style={{ background: tab === 'inbox' ? 'var(--ember)' : '' }}>Inbox</button>
           <button className={`btn-medieval ${tab==='sent'?'active':''}`} onClick={() => setTab('sent')} style={{ background: tab === 'sent' ? 'var(--ember)' : '' }}>Sent</button>
           <div style={{ marginLeft: 'auto' }}>
@@ -71,7 +71,7 @@ export default function InboxPanel({ onClose }) {
         </div>
 
         {tab === 'inbox' && (
-          <div className="scroll-content" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          <div className="scroll-content" style={{ flex: 1, overflowY: 'auto' }}>
             {loading ? <div>Loading...</div> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {inbox.length === 0 && <div style={{ color: 'var(--text-muted)' }}>No messages</div>}

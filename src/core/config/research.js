@@ -74,7 +74,7 @@ export const RESEARCH_DEFS = {
         }
     },
 
-    // --- MINE & BLOOMERY RESEARCH ---
+    // --- BLOOMERY & SAWPIT RESEARCH ---
     Bloomery: {
         'Bellows Design': {
             id: 'Bellows Design',
@@ -86,11 +86,11 @@ export const RESEARCH_DEFS = {
             type: 'Infinite'
         }
     },
-    SurfaceMine: {
+    StonePit: {
         'Deep Prospecting': {
             id: 'Deep Prospecting',
             name: 'Deep Prospecting',
-            description: 'Advanced mining techniques allow Surface Mines to refine ores from deeper deposits.',
+            description: 'Advanced mining techniques allow Stone Pits to refine ores from deeper deposits.',
             baseCost: { [ResourceEnum.Stone]: 500 },
             durationSeconds: 120,
             requiredTownLevel: 5,
@@ -102,32 +102,11 @@ export const RESEARCH_DEFS = {
             description: '+5% Mine Output per level.',
             baseCost: { [ResourceEnum.Stone]: 1000, [ResourceEnum.Food]: 500 },
             growthFactor: 1.6,
-            requirement: { building: 'SurfaceMine', level: 10 },
+            requirement: { building: 'StonePit', level: 10 },
             type: 'Infinite'
         }
     },
 
-    // --- SMITHY & SAWPIT RESEARCH ---
-    Smithy: {
-        'Alloy Mixing': {
-            id: 'Alloy Mixing',
-            name: 'Alloy Mixing',
-            description: '+3% Refined Yield per level.',
-            baseCost: { [ResourceEnum.IronIngot]: 2000 },
-            growthFactor: 1.6,
-            requirement: { building: 'Smithy', level: 5 },
-            type: 'Infinite'
-        },
-        'Tool Hardening': {
-            id: 'Tool Hardening',
-            name: 'Tool Hardening',
-            description: '+5% Build Speed per level.',
-            baseCost: { [ResourceEnum.Planks]: 500 },
-            growthFactor: 1.5,
-            requirement: { building: 'Smithy', level: 1 },
-            type: 'Infinite'
-        }
-    },
     Sawpit: {
         'Wagon Reinforce': {
             id: 'Wagon Reinforce',

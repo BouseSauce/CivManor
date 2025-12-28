@@ -6,7 +6,7 @@ import { RESOURCE_ICON_MAP } from '../constants/iconMaps';
  * Displays key resource stocks in the "Resource Ribbon" style.
  */
 const AreaHeaderBar = ({ resources, stats }) => {
-    const gameResources = ['food','timber','stone','planks','ore','ingots','tools','steel','gold','horses','captives'];
+    const gameResources = ['food','timber','stone','planks','ore','ingots','steel','gold','horses','captives'];
 
     const cap = (s) => s[0].toUpperCase() + s.slice(1);
 

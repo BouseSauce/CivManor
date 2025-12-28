@@ -6,7 +6,7 @@ import BuildingDetailPanel from './BuildingDetailPanel';
 import { BUILDING_CONFIG } from '../../core/config/buildings.js';
 import { RESEARCH_DEFS } from '../../core/config/research.js';
 
-const MILITARY_BUILDINGS = ['Barracks', 'Stable', 'SiegeWorkshop', 'Smithy', 'Wall', 'Tower', 'ShadowGuild'];
+const MILITARY_BUILDINGS = ['Barracks', 'Stable', 'SiegeWorkshop', 'Wall', 'Tower', 'Watchtower'];
 
 /**
  * ManagementPanel - Displays a grid of buildings
@@ -69,6 +69,27 @@ const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssi
         };
     });
 
+    // Ensure `Barracks` appears in the canonical list (workaround for any accidental omissions)
+    if (!canonicalBuildings.find(b => b.id === 'Barracks')) {
+        const cfg = BUILDING_CONFIG['Barracks'] || {};
+        canonicalBuildings.push({
+            id: 'Barracks',
+            name: cfg.name || 'Barracks',
+            displayName: cfg.displayName || cfg.name || 'Barracks',
+            level: 0,
+            isLocked: true,
+            isUpgrading: false,
+            isQueued: false,
+            assigned: 0,
+            missingReqs: [],
+            category: cfg.category || 'Military',
+            tags: cfg.tags || [],
+            icon: cfg.icon || null,
+            upgradeCost: null,
+            isVisible: true
+        });
+    }
+
     // Filter buildings
     const filteredBuildings = canonicalBuildings.filter(b => {
         if (!b.isVisible) return false;
@@ -92,7 +113,7 @@ const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssi
 
         if (filter === 'industry') {
             const name = (b.name || '').toLowerCase();
-            const industryNames = ['smith', 'workshop', 'mill', 'forge', 'factory', 'smithy'];
+            const industryNames = ['workshop', 'mill', 'forge', 'factory'];
             if (b.resourceTier === 'Industry') return true;
             if (industryNames.some(n => name.includes(n))) return true;
             return false;
@@ -151,9 +172,9 @@ const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssi
         const id = b.id;
         const name = (b.name || '').toLowerCase();
         const cat = (b.category || '').toString().toLowerCase();
-        if (cat.includes('military') || ['barracks','stable','archeryrange','wall','tower','siegeworshop','siegeworskshop','smithy'].some(x=>id.toLowerCase().includes(x) || name.includes(x))) return 'Stronghold';
-        if (['mine','quarry','surfacemine','deepmine','goldshaft','sawpit'].some(x=>id.toLowerCase().includes(x) || name.includes(x))) return 'Extraction';
-        if (['smithy','bloomery','sawpit','sawmill','steelworks','saw'].some(x=>id.toLowerCase().includes(x) || name.includes(x))) return 'Industry';
+        if (cat.includes('military') || ['barracks','stable','archeryrange','wall','tower','siegeworshop','siegeworskshop'].some(x=>id.toLowerCase().includes(x) || name.includes(x))) return 'Stronghold';
+        if (['mine','quarry','surfacemine','goldshaft','sawpit'].some(x=>id.toLowerCase().includes(x) || name.includes(x))) return 'Extraction';
+        if (['bloomery','sawpit','sawmill','steelworks','saw'].some(x=>id.toLowerCase().includes(x) || name.includes(x))) return 'Industry';
         // Township is default for homes, townhall, storehouse
         return 'Township';
     };

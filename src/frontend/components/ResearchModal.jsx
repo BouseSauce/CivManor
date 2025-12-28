@@ -51,6 +51,42 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
 
   const { researched = [], active = null } = researchState;
 
+  const renderIcon = (tech) => {
+    let iconClass = 'fa-flask';
+    const tid = tech.id.toLowerCase();
+    if (tid.includes('sanitation')) iconClass = 'fa-hand-holding-droplet';
+    else if (tid.includes('framing')) iconClass = 'fa-house-chimney-window';
+    else if (tid.includes('tactics')) iconClass = 'fa-scroll';
+    else if (tid.includes('festivals')) iconClass = 'fa-wheat-awn';
+    else if (tid.includes('storage')) iconClass = 'fa-warehouse';
+    else if (tid.includes('preservation')) iconClass = 'fa-box-archive';
+    else if (tid.includes('bellows')) iconClass = 'fa-wind';
+    else if (tid.includes('prospecting')) iconClass = 'fa-pickaxe';
+    else if (tid.includes('military')) iconClass = 'fa-shield-halved';
+    else if (tid.includes('watchtower')) iconClass = 'fa-tower-observation';
+    else if (tid.includes('economy')) iconClass = 'fa-coins';
+
+    return (
+      <div className="beveled-panel" style={{ 
+        width: 60, height: 60, 
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1.8rem', color: 'var(--accent-gold)',
+        flexShrink: 0,
+        background: 'linear-gradient(145deg, #2d1b0d, #1a0f0a)',
+        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)'
+      }}>
+        <i className={`fas ${iconClass}`}></i>
+      </div>
+    );
+  };
+
+  const getStatusBadge = (tech, isResearched, isActive, isLocked) => {
+    if (isResearched) return <span style={{ color: '#66bb6a', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Completed</span>;
+    if (isActive) return <span style={{ color: 'var(--ember)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>In Progress</span>;
+    if (isLocked) return <span style={{ color: '#888', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Locked</span>;
+    return <span style={{ color: 'var(--accent-gold)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Available</span>;
+  };
+
   const renderTechCard = (tech) => {
     const isResearched = researched.includes(tech.id);
     const isActive = active && active.techId === tech.id;
@@ -60,121 +96,137 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
     // Check resources
     const canAfford = Object.entries(tech.baseCost || {}).every(([res, amt]) => (area.resources[res] || 0) >= amt);
 
+    const remainingTicks = isActive ? (active.ticksRemaining || 0) : 0;
+    const totalTicks = isActive ? (active.totalTicks || 60) : 60;
+    const progress = isActive ? Math.min(100, Math.max(0, 100 - (remainingTicks / totalTicks) * 100)) : 0;
+
     return (
       <div key={tech.id} 
         className="standard-card"
         title={isLocked ? `Requires ${tech.requirement.building} Level ${tech.requirement.level}` : ''}
         style={{
-          border: isActive ? '1px solid #66bb6a' : undefined,
           opacity: isLocked ? 0.7 : 1,
           pointerEvents: isLocked ? 'none' : 'auto',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: '180px'
+          padding: '16px',
+          position: 'relative',
+          border: isActive ? '1px solid var(--ember)' : '1px solid rgba(255,255,255,0.05)'
       }}>
-        {isLocked && (
-          <div style={{ 
-            position: 'absolute', top: 8, right: 8, 
-            color: '#aaa', 
-            background: 'rgba(0,0,0,0.5)', 
-            borderRadius: '50%', width: 24, height: 24, 
-            display: 'flex', alignItems: 'center', justifyContent: 'center' 
-          }}>
-            <i className="fas fa-lock"></i>
-          </div>
-        )}
-        
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-            <h4 className="font-cinzel" style={{ 
-              margin: 0, 
-              color: isActive ? '#66bb6a' : '#e0cda0', 
-              fontSize: '1.1rem',
-              fontWeight: 800,
-              textShadow: '0 1px 0 rgba(255,255,255,0.5)'
+        {/* Header with Icon and Title */}
+        <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+          {renderIcon(tech)}
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <h4 className="font-cinzel" style={{ 
+                margin: 0, 
+                color: isActive ? 'var(--ember)' : '#e0cda0', 
+                fontSize: '1.1rem',
+                fontWeight: 800,
+                lineHeight: 1.2
+              }}>
+                {tech.name}
+              </h4>
+              {getStatusBadge(tech, isResearched, isActive, isLocked)}
+            </div>
+            <p className="font-garamond" style={{ 
+              margin: '4px 0 0 0', 
+              fontSize: '0.85rem', 
+              color: '#aaa', 
+              lineHeight: 1.3,
+              fontStyle: 'italic'
             }}>
-              {tech.name}
-            </h4>
-            {isResearched && <span style={{ color: '#2e7d32', fontSize: '0.9rem', fontWeight: 'bold' }}><i className="fas fa-check"></i></span>}
+              {tech.description}
+            </p>
           </div>
-
-          <p className="font-garamond" style={{ 
-            margin: '0 0 12px 0', 
-            fontSize: '0.9rem', 
-            color: '#ccc', 
-            lineHeight: 1.4
-          }}>
-            {tech.description}
-          </p>
         </div>
 
-        <div>
-          {/* Cost */}
+        {/* Requirements / Costs */}
+        <div style={{ flex: 1 }}>
           {!isResearched && !isActive && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-              {Object.entries(tech.baseCost || {}).map(([res, amt]) => {
-                const hasRes = (area.resources[res] || 0) >= amt;
-                const iconDef = getIconForResource(res);
-                return (
-                  <div key={res} style={{ 
-                    display: 'flex', alignItems: 'center', gap: 4, 
-                    color: hasRes ? '#e0cda0' : '#ff4d4d',
-                    fontSize: '0.85rem',
-                    fontWeight: 'bold',
-                    background: 'rgba(0,0,0,0.2)',
-                    padding: '2px 6px',
-                    borderRadius: 4
-                  }}>
-                    <i className={`fas ${iconDef.icon}`}></i> <span className="font-cinzel">{amt}</span>
-                  </div>
-                );
-              })}
+            <div style={{ 
+              background: 'rgba(0,0,0,0.2)', 
+              borderRadius: 4, 
+              padding: '8px 12px',
+              marginBottom: 12,
+              border: '1px solid rgba(255,255,255,0.05)'
+            }}>
+              <div style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase', marginBottom: 6, letterSpacing: '0.5px' }}>Research Cost</div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {Object.entries(tech.baseCost || {}).map(([res, amt]) => {
+                  const hasRes = (area.resources[res] || 0) >= amt;
+                  const iconDef = getIconForResource(res);
+                  return (
+                    <div key={res} style={{ 
+                      display: 'flex', alignItems: 'center', gap: 6, 
+                      color: hasRes ? '#e0cda0' : '#ff4d4d',
+                      fontSize: '0.9rem',
+                      fontWeight: 'bold'
+                    }}>
+                      <i className={`fas ${iconDef.icon}`} style={{ fontSize: '0.8rem', opacity: 0.8 }}></i>
+                      <span className="font-cinzel">{amt}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
           {/* Progress Bar */}
           {isActive && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: 4, color: 'var(--text-main)', fontWeight: 'bold' }}>
-                <span>Researching...</span>
-                <span>{Math.max(0, Math.ceil((active.completesAt - Date.now()) / 1000))}s</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: 6, color: 'var(--text-main)', fontWeight: 'bold' }}>
+                <span className="font-cinzel" style={{ letterSpacing: '1px' }}>RESEARCHING...</span>
+                <span className="font-cinzel">{remainingTicks} ticks</span>
               </div>
-              <div style={{ height: 8, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ height: 6, background: 'rgba(0,0,0,0.3)', borderRadius: 3, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <div style={{ 
-                  width: `${Math.min(100, Math.max(0, 100 - ((active.completesAt - Date.now()) / (tech.durationSeconds * 1000)) * 100))}%`, 
+                  width: `${progress}%`, 
                   height: '100%', 
-                  background: 'var(--ember)',
+                  background: 'linear-gradient(90deg, var(--ember), #ff8a34)',
+                  boxShadow: '0 0 10px var(--ember)',
                   transition: 'width 1s linear'
                 }} />
               </div>
             </div>
           )}
-
-          {/* Action Button */}
-          {!isResearched && !isActive && (
-            <button
-              onClick={() => startResearch(tech.id)}
-              disabled={!canAfford || loading || active}
-              style={{
-                width: '100%',
-                padding: '10px',
-                background: canAfford ? 'var(--wood-dark)' : 'rgba(0,0,0,0.1)',
-                border: 'none',
-                color: canAfford ? 'var(--parchment)' : 'var(--text-muted)',
-                cursor: canAfford ? 'pointer' : 'not-allowed',
-                fontFamily: 'MedievalSharp, serif',
-                textTransform: 'uppercase',
-                borderRadius: 4,
-                fontWeight: 'bold',
-                boxShadow: canAfford ? '0 2px 4px rgba(0,0,0,0.3)' : 'none',
-                transition: 'all 0.2s'
-              }}
-            >
-              {active ? 'Research Busy' : (canAfford ? 'Start Research' : 'Insufficient Resources')}
-            </button>
-          )}
         </div>
+
+        {/* Action Button */}
+        {!isResearched && !isActive && (
+          <button
+            onClick={() => startResearch(tech.id)}
+            disabled={!canAfford || loading || active}
+            className="medieval-button"
+            style={{
+              width: '100%',
+              padding: '8px',
+              fontSize: '0.9rem',
+              opacity: (canAfford && !active) ? 1 : 0.6,
+              cursor: (canAfford && !active) ? 'pointer' : 'not-allowed'
+            }}
+          >
+            {active ? 'ACADEMY BUSY' : (canAfford ? 'START RESEARCH' : 'LACKING RESOURCES')}
+          </button>
+        )}
+
+        {isResearched && (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '8px', 
+            background: 'rgba(102, 187, 106, 0.1)', 
+            borderRadius: 4,
+            border: '1px solid rgba(102, 187, 106, 0.2)',
+            color: '#66bb6a',
+            fontSize: '0.8rem',
+            fontWeight: 'bold',
+            textTransform: 'uppercase',
+            letterSpacing: '1px'
+          }}>
+            <i className="fas fa-check-circle" style={{ marginRight: 6 }}></i>
+            Research Complete
+          </div>
+        )}
       </div>
     );
   };

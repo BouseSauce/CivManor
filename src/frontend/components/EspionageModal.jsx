@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GameClient } from '../api/client';
 
-export default function EspionageModal({ isOpen, onClose, targetAreaId, targetName }) {
+export default function EspionageModal({ isOpen, onClose, targetAreaId, targetName, user, regions }) {
   const [intel, setIntel] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -28,12 +28,25 @@ export default function EspionageModal({ isOpen, onClose, targetAreaId, targetNa
   if (!isOpen) return null;
 
   const CensoredRow = ({ label, value, isCensored }) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-      <span style={{ fontWeight: 600 }}>{label}:</span>
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      padding: '8px 0', 
+      borderBottom: '1px solid rgba(255,255,255,0.1)',
+      fontSize: '0.95rem'
+    }}>
+      <span style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>{label}:</span>
       {isCensored ? (
-        <span style={{ background: '#000', color: '#000', padding: '0 4px', borderRadius: 2, userSelect: 'none' }}>XXXXXX</span>
+        <span style={{ 
+          background: '#000', 
+          color: '#000', 
+          padding: '0 8px', 
+          borderRadius: 2, 
+          userSelect: 'none',
+          opacity: 0.5
+        }}>XXXXXX</span>
       ) : (
-        <span>{value}</span>
+        <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{value}</span>
       )}
     </div>
   );
@@ -41,49 +54,141 @@ export default function EspionageModal({ isOpen, onClose, targetAreaId, targetNa
   return (
     <div className="modal-overlay" style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+      backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
     }}>
-      <div className="medieval-panel" style={{ width: '450px', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
-        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Intelligence Report: {targetName || targetAreaId}</span>
+      <div className="medieval-panel" style={{ width: '480px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', border: '2px solid var(--accent-gold)' }}>
+        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--wood-medium)', borderBottom: '1px solid var(--accent-gold)' }}>
+          <span className="font-cinzel" style={{ fontSize: '1.1rem' }}>Intelligence Report: {targetName || targetAreaId}</span>
           <button className="btn btn-small" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
         </div>
         
-        <div className="panel-body" style={{ padding: 20, background: 'var(--parchment)', color: 'var(--wood-dark)' }}>
-          {loading && <div style={{ textAlign: 'center', padding: 20 }}>Gathering intelligence...</div>}
-          {error && <div style={{ color: '#b71c1c', padding: 10, background: 'rgba(183, 28, 28, 0.1)', borderRadius: 4 }}>{error}</div>}
+        <div className="panel-body" style={{ 
+          padding: '25px', 
+          background: 'var(--parchment)', 
+          color: 'var(--text-main)',
+          boxShadow: 'inset 0 0 60px rgba(0,0,0,0.5)'
+        }}>
+          {loading && <div style={{ textAlign: 'center', padding: 40 }}>
+            <i className="fa-solid fa-magnifying-glass fa-spin" style={{ fontSize: '2.5rem', marginBottom: 15, display: 'block', color: 'var(--accent-gold)' }}></i>
+            <div className="font-cinzel">Gathering intelligence...</div>
+          </div>}
+          {error && <div style={{ 
+            color: '#b71c1c', 
+            padding: 15, 
+            background: 'rgba(183, 28, 28, 0.1)', 
+            borderRadius: 4,
+            border: '1px solid rgba(183, 28, 28, 0.2)',
+            marginBottom: 15,
+            fontSize: '0.9rem'
+          }}>{error}</div>}
           
           {intel && (
             <div style={{ fontFamily: 'var(--font-body)' }}>
-              <div style={{ 
+              <div className="font-cinzel" style={{ 
                 textAlign: 'center', 
-                fontSize: '1.2rem', 
+                fontSize: '1.4rem', 
                 fontWeight: 700, 
-                marginBottom: 15, 
+                marginBottom: 10, 
                 textTransform: 'uppercase',
-                borderBottom: '2px solid var(--wood-dark)',
-                paddingBottom: 5
+                borderBottom: '2px solid var(--accent-gold)',
+                paddingBottom: 8,
+                color: 'var(--text-highlight)'
               }}>
                 Intel Depth: {intel.depth}
               </div>
 
+              <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                <span style={{ 
+                  fontSize: '0.8rem', 
+                  padding: '4px 12px', 
+                  borderRadius: '12px', 
+                  background: intel.lastInfiltration ? 'rgba(255, 215, 0, 0.1)' : 'rgba(46, 125, 50, 0.1)',
+                  color: intel.lastInfiltration ? 'var(--text-highlight)' : 'var(--accent-green)',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  border: '1px solid currentColor',
+                  letterSpacing: '1px'
+                }}>
+                  {intel.lastInfiltration ? 'Historical Data' : 'Live Intel'}
+                </span>
+              </div>
+
+              {intel.lastInfiltration && (
+                <div style={{ 
+                  textAlign: 'center', 
+                  fontSize: '0.85rem', 
+                  opacity: 0.9, 
+                  marginBottom: 20,
+                  fontStyle: 'italic',
+                  color: 'var(--text-main)',
+                  padding: '10px',
+                  background: 'rgba(0,0,0,0.2)',
+                  borderRadius: '4px',
+                  border: '1px dashed rgba(255,255,255,0.1)'
+                }}>
+                  Report from: {new Date(intel.lastInfiltration).toLocaleString()}
+                  {intel.originAreaId && <div style={{ fontSize: '0.75rem', marginTop: 4, opacity: 0.7 }}>Origin: {intel.originAreaId}</div>}
+                </div>
+              )}
+
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-around', 
+                marginBottom: 25, 
+                padding: '15px', 
+                background: 'rgba(0,0,0,0.3)', 
+                borderRadius: 6,
+                fontSize: '0.95rem',
+                border: '1px solid rgba(255,255,255,0.05)'
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ opacity: 0.7, fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: 4 }}>Your Spy Level</div>
+                  <div style={{ fontWeight: 800, color: 'var(--text-highlight)', fontSize: '1.1rem' }}>{intel.attackerSpyLevel || 0}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', opacity: 0.4 }}>
+                  <i className="fa-solid fa-vs" style={{ fontSize: '0.8rem' }}></i>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ opacity: 0.7, fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: 4 }}>Counter-Spy Level</div>
+                  <div style={{ fontWeight: 800, color: intel.counterSpyLevel !== undefined ? 'var(--accent-red)' : '#555', fontSize: '1.1rem' }}>
+                    {intel.counterSpyLevel !== undefined ? intel.counterSpyLevel : '??'}
+                  </div>
+                </div>
+              </div>
+
               {intel.depth === 'FAILED' ? (
-                <div style={{ textAlign: 'center', padding: 20, fontStyle: 'italic' }}>
+                <div style={{ textAlign: 'center', padding: 30, fontStyle: 'italic', color: 'var(--text-muted)', fontSize: '1.1rem' }}>
                   "Our spies were unable to penetrate their defenses. Some did not return."
                 </div>
               ) : (
                 <>
-                  <section style={{ marginBottom: 20 }}>
-                    <h4 style={{ borderBottom: '1px solid rgba(0,0,0,0.2)', marginBottom: 8 }}>Resource Stockpiles</h4>
-                    <CensoredRow label="Food" value={Math.floor(intel.resources?.Food || 0)} isCensored={false} />
-                    <CensoredRow label="Timber" value={Math.floor(intel.resources?.Timber || 0)} isCensored={false} />
-                    <CensoredRow label="Stone" value={Math.floor(intel.resources?.Stone || 0)} isCensored={false} />
-                    <CensoredRow label="Gold" value={Math.floor(intel.resources?.Gold || 0)} isCensored={false} />
+                  <section style={{ marginBottom: 30 }}>
+                    <h4 className="font-cinzel" style={{ 
+                      borderBottom: '1px solid rgba(197, 160, 89, 0.3)', 
+                      marginBottom: 12,
+                      color: 'var(--accent-gold)',
+                      fontSize: '0.9rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1.5px',
+                      paddingBottom: '4px'
+                    }}>Resource Stockpiles</h4>
+                    <CensoredRow label="Food" value={Math.floor(intel.resources?.Food || 0).toLocaleString()} isCensored={false} />
+                    <CensoredRow label="Timber" value={Math.floor(intel.resources?.Timber || 0).toLocaleString()} isCensored={false} />
+                    <CensoredRow label="Stone" value={Math.floor(intel.resources?.Stone || 0).toLocaleString()} isCensored={false} />
+                    <CensoredRow label="Gold" value={Math.floor(intel.resources?.Gold || 0).toLocaleString()} isCensored={false} />
                   </section>
 
-                  <section style={{ marginBottom: 20 }}>
-                    <h4 style={{ borderBottom: '1px solid rgba(0,0,0,0.2)', marginBottom: 8 }}>Infrastructure</h4>
-                    {['TownHall', 'Barracks', 'ShadowGuild', 'Library'].map(bId => (
+                  <section style={{ marginBottom: 30 }}>
+                    <h4 className="font-cinzel" style={{ 
+                      borderBottom: '1px solid rgba(197, 160, 89, 0.3)', 
+                      marginBottom: 12,
+                      color: 'var(--accent-gold)',
+                      fontSize: '0.9rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1.5px',
+                      paddingBottom: '4px'
+                    }}>Infrastructure</h4>
+                    {['TownHall', 'Barracks', 'Watchtower', 'Library'].map(bId => (
                       <CensoredRow 
                         key={bId} 
                         label={bId.replace(/([A-Z])/g, ' $1').trim()} 
@@ -93,8 +198,16 @@ export default function EspionageModal({ isOpen, onClose, targetAreaId, targetNa
                     ))}
                   </section>
 
-                  <section>
-                    <h4 style={{ borderBottom: '1px solid rgba(0,0,0,0.2)', marginBottom: 8 }}>Garrison</h4>
+                  <section style={{ marginBottom: 30 }}>
+                    <h4 className="font-cinzel" style={{ 
+                      borderBottom: '1px solid rgba(197, 160, 89, 0.3)', 
+                      marginBottom: 12,
+                      color: 'var(--accent-gold)',
+                      fontSize: '0.9rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1.5px',
+                      paddingBottom: '4px'
+                    }}>Garrison</h4>
                     {['Villager', 'Militia', 'Spearmen', 'Spy'].map(uType => (
                       <CensoredRow 
                         key={uType} 
@@ -104,36 +217,18 @@ export default function EspionageModal({ isOpen, onClose, targetAreaId, targetNa
                       />
                     ))}
                   </section>
-
-                  <div style={{ marginTop: 20, display: 'flex', justifyContent: 'center' }}>
-                    <button 
-                      className="btn btn-primary" 
-                      onClick={async () => {
-                        try {
-                          const resp = await GameClient.sendSpy(targetAreaId, window.gameState.activeAreaID);
-                          alert(resp.message);
-                          loadIntel();
-                        } catch (e) {
-                          alert('Failed to send spy: ' + e.message);
-                        }
-                      }}
-                    >
-                      <i className="fa-solid fa-user-secret" style={{ marginRight: 8 }}></i>
-                      Send Infiltration Spy
-                    </button>
-                  </div>
                 </>
               )}
               
-              <div style={{ marginTop: 20, fontSize: '0.8rem', opacity: 0.6, textAlign: 'center', borderTop: '1px solid rgba(0,0,0,0.1)', paddingTop: 10 }}>
+              <div style={{ marginTop: 25, fontSize: '0.75rem', opacity: 0.5, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 12, letterSpacing: '2px' }}>
                 CONFIDENTIAL - FOR YOUR EYES ONLY
               </div>
             </div>
           )}
         </div>
         
-        <div className="panel-footer" style={{ padding: 10, textAlign: 'right' }}>
-          <button className="btn" onClick={onClose}>Close</button>
+        <div className="panel-footer" style={{ padding: '15px', textAlign: 'right', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <button className="btn" onClick={onClose} style={{ minWidth: '100px' }}>Close</button>
         </div>
       </div>
     </div>

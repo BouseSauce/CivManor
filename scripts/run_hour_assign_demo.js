@@ -20,7 +20,7 @@ function fmt(n) { return (typeof n === 'number') ? Math.round(n*100)/100 : n; }
   state.buildings['Farm'] = 4;
   state.buildings['LoggingCamp'] = 4;
   state.buildings['StonePit'] = 3;
-  state.buildings['DeepMine'] = 2;
+  state.buildings['Bloomery'] = 2;
   state.buildings['Storehouse'] = 2; // storage
   state.buildings['TownHall'] = 2;
 
@@ -31,7 +31,7 @@ function fmt(n) { return (typeof n === 'number') ? Math.round(n*100)/100 : n; }
   state.resources[ResourceEnum.Gold] = 5;
 
   // Assign villagers by priority until we run out or reach max per building
-  const order = ['Farm','LoggingCamp','StonePit','DeepMine'];
+  const order = ['Farm','LoggingCamp','StonePit','Bloomery'];
   let remaining = state.units[UnitTypeEnum.Villager] || 0;
   order.forEach(bid => {
     const lvl = state.buildings[bid] || 0;

@@ -24,7 +24,6 @@ export const ResourceEnum = {
     Steel: 'Steel',
     
     // T3 - Advanced
-    Tools: 'Tools',
     SimpleSpear: 'SimpleSpear',
     Horse: 'Horse',
     

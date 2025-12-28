@@ -8,11 +8,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/server.js",
+    "simulate": "node scripts/simulate_game.js",
     "list-areas": "node scripts/list_areas.js",
     "generate-world": "node scripts/generate_regions.js",
     "start:all": "concurrently \"npm:server\" \"npm:dev\"",
     "db:init": "node server/db/init_db.js",
-    "start": "npm run server",
+    "start": "node scripts/ensure_server.cjs",
     "test": "node test/buildingPrereqs.test.js"
   },
   "dependencies": {

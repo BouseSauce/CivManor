@@ -193,6 +193,16 @@ export const GameClient = {
         return resp;
     },
 
+    async toggleAutoAssign(areaId, buildingId, enabled) {
+        const resp = await this.authFetch(`/area/${areaId}/auto-assign`, { method: 'POST', body: JSON.stringify({ buildingId, enabled }) });
+        try {
+            if (typeof window !== 'undefined' && resp) {
+                window.dispatchEvent(new CustomEvent('area:updated', { detail: { areaId, autoAssign: resp.autoAssign } }));
+            }
+        } catch (e) {}
+        return resp;
+    },
+
     async claimArea(areaId, name) {
         const body = name ? { name } : {};
         return await this.authFetch(`/area/${areaId}/claim`, { method: 'POST', body: JSON.stringify(body) });
@@ -200,6 +210,10 @@ export const GameClient = {
 
     async upgradeArea(areaId, buildingId) {
         return await this.authFetch(`/area/${areaId}/upgrade`, { method: 'POST', body: JSON.stringify({ buildingId }) });
+    },
+
+    async recruitUnits(areaId, unitType, count) {
+        return await this.authFetch(`/area/${areaId}/recruit`, { method: 'POST', body: JSON.stringify({ unitType, count }) });
     },
 
     async cancelUpgrade(areaId, itemId, itemType = 'Building') {
@@ -253,8 +267,23 @@ export const GameClient = {
 
     async launchExpedition(originAreaId, targetAreaId, units) {
         return await this.authFetch(`/area/${originAreaId}/expedition`, { method: 'POST', body: JSON.stringify({ targetAreaId, units }) });
-    }
-    ,
+    },
+
+    async launchScout(areaId, targetMissionId) {
+        return await this.authFetch(`/area/${areaId}/scout-incoming`, { 
+            method: 'POST', 
+            body: JSON.stringify({ targetMissionId }) 
+        });
+    },
+
+    async setRationLevel(areaId, level) {
+        return await this.authFetch(`/area/${areaId}/ration-level`, { method: 'POST', body: JSON.stringify({ level }) });
+    },
+
+    async buyCivicUpgrade(areaId, buildingId, upgradeId) {
+        return await this.authFetch(`/area/${areaId}/civic-upgrade`, { method: 'POST', body: JSON.stringify({ buildingId, upgradeId }) });
+    },
+
     async collectSalvage(targetAreaId, collectorAreaId) {
         return await this.authFetch(`/area/${targetAreaId}/collect-salvage`, { method: 'POST', body: JSON.stringify({ collectorAreaId }) });
     }

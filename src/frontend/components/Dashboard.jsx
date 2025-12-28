@@ -204,7 +204,19 @@ export default function Dashboard({ user, onLogout, onUserUpdate }) {
   };
 
   const handleRecruit = async (unitType, count) => {
-    alert(`Recruiting ${count} ${unitType} (Not implemented in backend yet)`);
+    try {
+      const r = await GameClient.recruitUnits(selectedArea, unitType, count);
+      if (r && r.success) {
+        const updated = await GameClient.getArea(selectedArea);
+        setAreaData(updated);
+      } else {
+        const msg = r?.message || r?.error || (typeof r === 'string' ? r : JSON.stringify(r)) || 'Unknown error';
+        alert('Recruitment failed: ' + msg);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Recruitment error: ' + (e?.message || String(e)));
+    }
   };
 
   // Helper to get capacities for the header bar
@@ -241,9 +253,9 @@ export default function Dashboard({ user, onLogout, onUserUpdate }) {
           openResearchModal={openResearchModal}
         />
       ) : (
-      <div style={{ padding: 20, height: 'calc(100% - 60px)', boxSizing: 'border-box', overflow: 'hidden' }}>
+      <div style={{ padding: 20, height: 'calc(100% - 60px)', boxSizing: 'border-box', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {view !== 'area' && (
-            <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
             <h2 style={{ color: 'var(--parchment)', textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>Dashboard</h2>
             <div />
             </div>

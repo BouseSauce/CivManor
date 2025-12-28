@@ -141,10 +141,19 @@ export default function HexGrid({ width, height, items, onHexClick, renderHexCon
     return { ...item, q, r, ...pos };
   });
 
-  const gridWidth = (maxX - minX) + hexWidth + 200;
-  const gridHeight = (maxY - minY) + hexHeight + 200;
-  const offsetX = -minX + 100;
-  const offsetY = -minY + 100;
+  // Guard against empty or invalid item sets which can leave min/max as Infinity
+  let gridWidth = (maxX - minX) + hexWidth + 200;
+  let gridHeight = (maxY - minY) + hexHeight + 200;
+  let offsetX = -minX + 100;
+  let offsetY = -minY + 100;
+  if (!isFinite(gridWidth) || !isFinite(gridHeight) || !isFinite(offsetX) || !isFinite(offsetY)) {
+    const fallbackW = (typeof width === 'number' && isFinite(width)) ? width : 1200;
+    const fallbackH = (typeof height === 'number' && isFinite(height)) ? height : 800;
+    gridWidth = fallbackW;
+    gridHeight = fallbackH;
+    offsetX = 100;
+    offsetY = 100;
+  }
 
   return (
     <div className={`hex-grid-wrapper`} style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
