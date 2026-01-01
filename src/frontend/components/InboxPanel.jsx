@@ -1,13 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { GameClient } from '../api/client';
 
-export default function InboxPanel({ onClose }) {
+export default function InboxPanel({ onClose, initialRecipient = null }) {
   const [tab, setTab] = useState('inbox');
   const [inbox, setInbox] = useState([]);
   const [sent, setSent] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [compose, setCompose] = useState({ to: '', subject: '', body: '' });
+
+  // If an initial recipient is provided (e.g., from map Message button), prefill compose.to
+  const recipientRef = useRef(null);
+
+  // If an initial recipient is provided (e.g., from map Message button), open compose and focus
+  useEffect(() => {
+    if (initialRecipient) {
+      setCompose(c => ({ ...c, to: initialRecipient }));
+      setTab('compose');
+      // Focus the recipient select after render
+      setTimeout(() => {
+        try { recipientRef.current && recipientRef.current.focus(); } catch (e) {}
+      }, 50);
+    }
+  }, [initialRecipient]);
 
   const load = async () => {
     setLoading(true);
@@ -65,6 +80,7 @@ export default function InboxPanel({ onClose }) {
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexShrink: 0 }}>
           <button className={`btn-medieval ${tab==='inbox'?'active':''}`} onClick={() => setTab('inbox')} style={{ background: tab === 'inbox' ? 'var(--ember)' : '' }}>Inbox</button>
           <button className={`btn-medieval ${tab==='sent'?'active':''}`} onClick={() => setTab('sent')} style={{ background: tab === 'sent' ? 'var(--ember)' : '' }}>Sent</button>
+          <button className={`btn-medieval ${tab==='compose'?'active':''}`} onClick={() => setTab('compose')} style={{ background: tab === 'compose' ? 'var(--ember)' : '' }}>Compose</button>
           <div style={{ marginLeft: 'auto' }}>
             <button className="btn-medieval" onClick={load}><i className="fa-solid fa-rotate"></i></button>
           </div>
@@ -137,24 +153,25 @@ export default function InboxPanel({ onClose }) {
             )}
           </div>
         )}
-
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Compose</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-            <select value={compose.to} onChange={e => setCompose(s => ({ ...s, to: e.target.value }))} style={{ minWidth: 220 }}>
-              <option value="">Choose recipient</option>
-              {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
-            </select>
-            <input placeholder="Subject" value={compose.subject} onChange={e => setCompose(s => ({ ...s, subject: e.target.value }))} style={{ flex: 1 }} />
+        {tab === 'compose' && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Compose</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+              <select ref={recipientRef} value={compose.to} onChange={e => setCompose(s => ({ ...s, to: e.target.value }))} style={{ minWidth: 220 }}>
+                <option value="">Choose recipient</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+              </select>
+              <input placeholder="Subject" value={compose.subject} onChange={e => setCompose(s => ({ ...s, subject: e.target.value }))} style={{ flex: 1 }} />
+            </div>
+            <div>
+              <textarea placeholder="Message body" value={compose.body} onChange={e => setCompose(s => ({ ...s, body: e.target.value }))} style={{ width: '100%', minHeight: 100 }} />
+            </div>
+            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={send}>Send</button>
+              <button className="btn" onClick={() => setCompose({ to: '', subject: '', body: '' })}>Clear</button>
+            </div>
           </div>
-          <div>
-            <textarea placeholder="Message body" value={compose.body} onChange={e => setCompose(s => ({ ...s, body: e.target.value }))} style={{ width: '100%', minHeight: 100 }} />
-          </div>
-          <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary" onClick={send}>Send</button>
-            <button className="btn" onClick={() => setCompose({ to: '', subject: '', body: '' })}>Clear</button>
-          </div>
-        </div>
+        )}
 
       </div>
     </div>

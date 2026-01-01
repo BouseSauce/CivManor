@@ -26,7 +26,7 @@ export default function RegionView({ region, onBack, onViewArea, onClaim, user }
       onViewArea(item.id, item.ownerId);
     } else {
       // Prompt to claim if unowned
-      const cartCount = (user && user.inventory && user.inventory.units && user.inventory.units.TradeCart) || 0;
+      const cartCount = (user && user.inventory && user.inventory.units && (user.inventory.units.SupplyCart || user.inventory.units.SupplyWagon || user.inventory.units.TradeCart)) || 0;
       if (cartCount > 0) {
         setClaimModal({ area: item, name: item.name || '', loading: false });
       } else {

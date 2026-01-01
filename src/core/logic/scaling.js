@@ -92,7 +92,7 @@ export function calculateResearchCost(techId, currentLevel) {
  * @returns {number} - Research time in seconds
  */
 export function calculateResearchTime(techId, currentLevel, cost) {
-    const def = RESEARCH_DEFS[techId];
+    const def = ALL_RESEARCH[techId];
     if (!def) return 60;
 
     // If it's a one-off and has a fixed duration, use it
@@ -130,15 +130,13 @@ export function calculateBuildTime(buildingId, currentLevel) {
         [ResourceEnum.Planks]: 4,
         [ResourceEnum.IronIngot]: 8,
         [ResourceEnum.Steel]: 40,
-        [ResourceEnum.GoldIngot]: 100,
         [ResourceEnum.Knowledge]: 0
     };
 
     const REFINING_PENALTY = {
         [ResourceEnum.Planks]: 0.5,
         [ResourceEnum.IronIngot]: 2,
-        [ResourceEnum.Steel]: 10,
-        [ResourceEnum.GoldIngot]: 5
+        [ResourceEnum.Steel]: 10
     };
 
     // 3. Calculate TRV and Penalty
@@ -158,4 +156,55 @@ export function calculateBuildTime(buildingId, currentLevel) {
     const timeSeconds = (totalTRV * 0.1) + totalPenalty;
     
     return Math.max(10, Math.floor(timeSeconds));
+}
+
+/**
+ * Calculates the storage capacity for a specific resource based on Storehouse level.
+ * Ensures capacity is always enough to afford the most expensive upgrade at that level.
+ * 
+ * @param {string} resource - The resource name
+ * @param {number} storehouseLevel - Current level of the Storehouse
+ * @returns {number} - Maximum storage capacity
+ */
+export function calculateStorageCapacity(resource, storehouseLevel) {
+    const shCfg = BUILDING_CONFIG['Storehouse'];
+    if (!shCfg) return 1000; // Fallback
+
+    // If the resource isn't in storageBase, it's likely a non-storable stat (like populationCap)
+    // or a special resource that shouldn't be capped by the Storehouse.
+    if (shCfg.storageBase && shCfg.storageBase[resource] === undefined) {
+        return Infinity;
+    }
+
+    const base = shCfg.storageBase[resource] || 0;
+    const mult = shCfg.storageMultiplier || 1.5;
+    const formulaCap = Math.floor(base * Math.pow(mult, storehouseLevel));
+
+    // Safety check: Ensure we can always afford the most expensive upgrade or research at this level
+    let maxNeeded = 0;
+
+    // Check Building Upgrade Costs
+    for (const bId of Object.keys(BUILDING_CONFIG)) {
+        try {
+            const costObj = calculateUpgradeCost(bId, storehouseLevel);
+            if (costObj[resource] && costObj[resource] > maxNeeded) {
+                maxNeeded = costObj[resource];
+            }
+        } catch (e) {}
+    }
+
+    // Check Research Costs
+    for (const techId of Object.keys(ALL_RESEARCH)) {
+        try {
+            const costObj = calculateResearchCost(techId, storehouseLevel);
+            if (costObj[resource] && costObj[resource] > maxNeeded) {
+                maxNeeded = costObj[resource];
+            }
+        } catch (e) {}
+    }
+
+    // Add a 10% buffer to the max needed cost so it fits comfortably
+    const buffer = Math.ceil(maxNeeded * 1.1);
+    
+    return Math.max(formulaCap, buffer);
 }

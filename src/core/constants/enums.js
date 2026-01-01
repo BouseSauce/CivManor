@@ -15,8 +15,6 @@ export const ResourceEnum = {
     Meat: 'Food',
     Fish: 'Food',
     Bread: 'Food',
-    Hides: 'Hides',
-    Leather: 'Leather',
 
     // T2 - Processed
     Planks: 'Planks',
@@ -24,15 +22,10 @@ export const ResourceEnum = {
     Steel: 'Steel',
     
     // T3 - Advanced
-    SimpleSpear: 'SimpleSpear',
     Horse: 'Horse',
     
     // T4 - Luxury/Special
     Knowledge: 'Knowledge',
-    Gold: 'Gold',
-    // T5 related
-    GoldOre: 'GoldOre',
-    GoldIngot: 'GoldIngot',
 
     // Horses and Captives (special resources / units)
     Horses: 'Horses',
@@ -49,15 +42,15 @@ export const UnitTypeEnum = {
     Spearmen: 'Spearmen',
     Knights: 'Knights',
     Trebuchet: 'Trebuchet',
-    TradeCart: 'TradeCart',
     Scout: 'Scout',
     // Additional military units
     ManAtArms: 'ManAtArms',
     ImperialGuard: 'ImperialGuard',
     Archer: 'Archer',
-    SupplyWagon: 'SupplyWagon',
     Mangonel: 'Mangonel',
-    Spy: 'Spy'
-    ,
-    Scholar: 'Scholar'
+    Spy: 'Spy',
+    Scholar: 'Scholar',
+    CargoWagon: 'CargoWagon',
+    LargeCargoWagon: 'LargeCargoWagon',
+    ClaimCart: 'ClaimCart'
 };

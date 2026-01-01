@@ -46,10 +46,11 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
   // Group research by building based on RESEARCH_DEFS
   const tabs = Object.keys(RESEARCH_DEFS);
   
-  // Get techs for current tab
-  const currentTechs = RESEARCH_DEFS[activeTab] ? Object.values(RESEARCH_DEFS[activeTab]) : [];
+  // Get techs for current tab from server defs if available
+  const sourceDefs = (researchState.defs && Object.keys(researchState.defs).length > 0) ? researchState.defs : RESEARCH_DEFS;
+  const currentTechs = sourceDefs[activeTab] ? Object.values(sourceDefs[activeTab]) : [];
 
-  const { researched = [], active = null } = researchState;
+  const { researched = [], active = null, techLevels = {} } = researchState;
 
   const renderIcon = (tech) => {
     let iconClass = 'fa-flask';
@@ -81,7 +82,10 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
   };
 
   const getStatusBadge = (tech, isResearched, isActive, isLocked) => {
-    if (isResearched) return <span style={{ color: '#66bb6a', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Completed</span>;
+    const currentLevel = techLevels[tech.id] || 0;
+    const isInfinite = tech.type === 'Infinite';
+    if (isInfinite && currentLevel > 0) return <span style={{ color: '#66bb6a', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Level {currentLevel}</span>;
+    if (isResearched && !isInfinite) return <span style={{ color: '#66bb6a', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Completed</span>;
     if (isActive) return <span style={{ color: 'var(--ember)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>In Progress</span>;
     if (isLocked) return <span style={{ color: '#888', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Locked</span>;
     return <span style={{ color: 'var(--accent-gold)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Available</span>;
@@ -90,11 +94,16 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
   const renderTechCard = (tech) => {
     const isResearched = researched.includes(tech.id);
     const isActive = active && active.techId === tech.id;
-    const isLocked = tech.requirement && tech.requirement.building && 
-      (!area.buildings.find(b => b.id === tech.requirement.building && b.level >= tech.requirement.level));
+    const currentLevel = techLevels[tech.id] || 0;
+    const isInfinite = tech.type === 'Infinite';
+    const isMaxLevel = tech.maxLevel && currentLevel >= tech.maxLevel;
+    
+    // Use server-provided locked state if available, otherwise fallback to local check
+    const isLocked = (typeof tech.locked !== 'undefined') ? tech.locked : (tech.requirement && tech.requirement.building && 
+      (!area.buildings.find(b => b.id === tech.requirement.building && b.level >= tech.requirement.level)));
     
     // Check resources
-    const canAfford = Object.entries(tech.baseCost || {}).every(([res, amt]) => (area.resources[res] || 0) >= amt);
+    const canAfford = Object.entries(tech.cost || tech.baseCost || {}).every(([res, amt]) => (area.resources[res] || 0) >= amt);
 
     const remainingTicks = isActive ? (active.ticksRemaining || 0) : 0;
     const totalTicks = isActive ? (active.totalTicks || 60) : 60;
@@ -125,7 +134,7 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
                 fontWeight: 800,
                 lineHeight: 1.2
               }}>
-                {tech.name}
+                {tech.name} {currentLevel > 0 && <span style={{ color: 'var(--accent-gold)', fontSize: '0.8rem' }}>(Lvl {currentLevel})</span>}
               </h4>
               {getStatusBadge(tech, isResearched, isActive, isLocked)}
             </div>
@@ -143,7 +152,7 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
 
         {/* Requirements / Costs */}
         <div style={{ flex: 1 }}>
-          {!isResearched && !isActive && (
+          {(!isResearched || isInfinite) && !isActive && !isMaxLevel && (
             <div style={{ 
               background: 'rgba(0,0,0,0.2)', 
               borderRadius: 4, 
@@ -153,7 +162,7 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
             }}>
               <div style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase', marginBottom: 6, letterSpacing: '0.5px' }}>Research Cost</div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {Object.entries(tech.baseCost || {}).map(([res, amt]) => {
+                {Object.entries(tech.cost || tech.baseCost || {}).map(([res, amt]) => {
                   const hasRes = (area.resources[res] || 0) >= amt;
                   const iconDef = getIconForResource(res);
                   return (
@@ -193,7 +202,7 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
         </div>
 
         {/* Action Button */}
-        {!isResearched && !isActive && (
+        {(!isResearched || isInfinite) && !isActive && !isMaxLevel && (
           <button
             onClick={() => startResearch(tech.id)}
             disabled={!canAfford || loading || active}
@@ -206,11 +215,11 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
               cursor: (canAfford && !active) ? 'pointer' : 'not-allowed'
             }}
           >
-            {active ? 'ACADEMY BUSY' : (canAfford ? 'START RESEARCH' : 'LACKING RESOURCES')}
+            {active ? 'ACADEMY BUSY' : (canAfford ? (isInfinite && currentLevel > 0 ? `RESEARCH LVL ${currentLevel + 1}` : 'START RESEARCH') : 'LACKING RESOURCES')}
           </button>
         )}
 
-        {isResearched && (
+        {isResearched && !isInfinite && (
           <div style={{ 
             textAlign: 'center', 
             padding: '8px', 
@@ -225,6 +234,24 @@ const ResearchModal = ({ isOpen, onClose, initialTab, area }) => {
           }}>
             <i className="fas fa-check-circle" style={{ marginRight: 6 }}></i>
             Research Complete
+          </div>
+        )}
+
+        {isMaxLevel && (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '8px', 
+            background: 'rgba(102, 187, 106, 0.1)', 
+            borderRadius: 4,
+            border: '1px solid rgba(102, 187, 106, 0.2)',
+            color: '#66bb6a',
+            fontSize: '0.8rem',
+            fontWeight: 'bold',
+            textTransform: 'uppercase',
+            letterSpacing: '1px'
+          }}>
+            <i className="fas fa-star" style={{ marginRight: 6 }}></i>
+            Maximum Level Reached
           </div>
         )}
       </div>

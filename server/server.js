@@ -262,6 +262,7 @@ function serializeAreaState(state) {
 
 function restoreAreaState(obj) {
     const s = new AreaState(obj.name, obj.housingCapacity || 100);
+    s.ownerId = obj.ownerId || null;
     s.tickCount = obj.tickCount || 0;
     s.resources = obj.resources || s.resources;
     s.salvagePool = obj.salvagePool || {};
@@ -401,7 +402,12 @@ async function loadGameState() {
 
         if (parsed.areaStates) {
             Object.entries(parsed.areaStates).forEach(([areaId, plain]) => {
-                areaStates[areaId] = restoreAreaState(plain);
+                const s = restoreAreaState(plain);
+                // Ensure ownerId is set from savedAreaOwners if missing in state
+                if (!s.ownerId && savedAreaOwners[areaId]) {
+                    s.ownerId = savedAreaOwners[areaId];
+                }
+                areaStates[areaId] = s;
             });
             console.log(`Loaded ${Object.keys(parsed.areaStates).length} area states from save`);
         }
@@ -416,6 +422,8 @@ let TICK_NUMBER = 0;
 // Prefer world-level tick setting when available so different worlds can have
 // independent pacing. Fall back to the global GAME_CONFIG value.
 const TICK_MS = (WORLD_CONFIG && typeof WORLD_CONFIG.tickMs === 'number') ? WORLD_CONFIG.tickMs : GAME_CONFIG.TICK_MS;
+// Configurable limits (expose via /api/config)
+const MAX_UNIT_QUEUE = parseInt(process.env.MAX_UNIT_QUEUE || process.env.UNIT_QUEUE_MAX || '5', 10) || 5;
 // Load persisted state (if any) then start tick loop
 loadGameState().then(() => {
     // If no explicit world data was loaded, build a minimal world from persisted `areaStates`.
@@ -446,7 +454,7 @@ loadGameState().then(() => {
         const areaIds = Object.keys(areaStates);
 
         // Prepare list of states to tick (demo + owned areas)
-        // We need areaId context for area states so we can check owner research (gold/ore storage)
+        // We need areaId context for area states so we can check owner research
         const states = [{ id: null, state: gameState }, ...Object.entries(areaStates).map(([id, s]) => ({ id, state: s }))];
 
         const summaries = [];
@@ -475,8 +483,8 @@ loadGameState().then(() => {
 
             const before = { resources: Object.assign({}, state.resources), population: state.population, queueLen: state.queue.length };
 
-            // Determine area-level storage permissions (gold/ore) based on owner research
-            let ctx = { allowGold: true, allowMinerals: true };
+            // Determine area-level storage permissions (minerals) based on owner research
+            let ctx = { allowMinerals: true };
             
             // Define attack resolver for missions
             ctx.resolveAttack = (mission) => {
@@ -564,6 +572,7 @@ loadGameState().then(() => {
                         });
                         // Mark that a battlefield wreck exists here so collectors can trigger refugee events
                         // Use a special key to avoid colliding with resource keys
+                        // We keep this for the refugee logic but it won't be shown as a "resource" in the UI
                         targetState.salvagePool['__battle_wrecks'] = (targetState.salvagePool['__battle_wrecks'] || 0) + 1;
                     }
                 } catch (err) {
@@ -700,9 +709,9 @@ loadGameState().then(() => {
                         loot[ResourceEnum.Horses] = amount;
                         log.push({ msg: `Elite Discovery: Captured ${amount} Wild Horses!` });
                     } else {
-                        const amount = Math.floor(Math.random() * 100) + 20;
-                        loot[ResourceEnum.Gold] = amount;
-                        log.push({ msg: `Elite Discovery: Found a small pouch containing ${amount} Gold.` });
+                        const amount = Math.floor(Math.random() * 500) + 200;
+                        loot[ResourceEnum.Knowledge] = amount;
+                        log.push({ msg: `Elite Discovery: Found ancient artifacts worth ${amount} Knowledge.` });
                     }
                 } else if (roll < (current += wCache)) {
                     // The Lost Cache
@@ -736,12 +745,53 @@ loadGameState().then(() => {
                     const ownerId = areaMeta ? areaMeta.ownerId : null;
                     if (ownerId && users[ownerId]) {
                         const researched = users[ownerId].researchedTechs || [];
-                        ctx.allowGold = researched.includes('Gold Storage');
-                        ctx.allowMinerals = researched.includes('Mineral Storage');
-                        ctx.hasDeepProspecting = researched.includes('Deep Prospecting');
+                        ctx.allowMinerals = true;
+                        ctx.hasDeepProspecting = false;
                     }
                 }
             } catch (e) { /* ignore permission calc errors */ }
+
+            // Define spy detection handler
+            ctx.onSpyCaught = (spy, caughtInState) => {
+                const spyOwnerId = spy.ownerId;
+                const territoryOwnerId = areaMeta ? areaMeta.ownerId : null;
+                const areaName = caughtInState.name || id;
+
+                // Calculate territory spy level for the reveal roll
+                const watchtowerLevel = (caughtInState.buildings && caughtInState.buildings['Watchtower']) || 0;
+                const assignedSpies = (caughtInState.assignments && caughtInState.assignments['Watchtower']) || 0;
+                const territorySpyLevel = calculateEffectiveSpyLevel(watchtowerLevel, assignedSpies);
+                const spyLevel = spy.spyLevel || 1;
+
+                // Reveal roll: Base 30% chance + 10% per level advantage
+                const revealChance = Math.max(0.1, Math.min(0.9, 0.3 + (territorySpyLevel - spyLevel) * 0.1));
+                const isRevealed = Math.random() < revealChance;
+                const originInfo = (isRevealed && spy.originAreaId) ? ` The spy was traced back to ${spy.originAreaId}.` : "";
+
+                // Notify spy owner
+                if (spyOwnerId && users[spyOwnerId]) {
+                    users[spyOwnerId].notifications = users[spyOwnerId].notifications || [];
+                    users[spyOwnerId].notifications.push({
+                        id: crypto.randomUUID(),
+                        text: `Your spy was caught and killed in ${areaName}!`,
+                        createdAt: new Date().toISOString(),
+                        read: false,
+                        payload: { type: 'spy_caught', areaId: id, areaName }
+                    });
+                }
+
+                // Notify territory owner
+                if (territoryOwnerId && users[territoryOwnerId]) {
+                    users[territoryOwnerId].notifications = users[territoryOwnerId].notifications || [];
+                    users[territoryOwnerId].notifications.push({
+                        id: crypto.randomUUID(),
+                        text: `An enemy spy was discovered and executed in ${areaName}!${originInfo}`,
+                        createdAt: new Date().toISOString(),
+                        read: false,
+                        payload: { type: 'spy_discovered', areaId: id, areaName, originAreaId: isRevealed ? spy.originAreaId : null }
+                    });
+                }
+            };
 
             // Pass 1 tick unit. Logic inside processTick handles scaling if needed, 
             // but generally 1 tick = 1 unit of production/consumption time.
@@ -863,6 +913,66 @@ loadGameState().then(() => {
                                     }
 
                                     console.log(`Mission ${m.id} (Attack) completed for area ${m.originAreaId}`);
+                                } else if (m.type === 'Espionage') {
+                                    // Resolve Espionage Mission
+                                    const targetState = areaStates[m.targetAreaId] || gameState;
+                                    const targetWatchtowerLevel = (targetState.buildings && targetState.buildings['Watchtower']) || 0;
+                                    const targetAssignedSpies = (targetState.assignments && targetState.assignments['Watchtower']) || 0;
+                                    const targetSpyLevel = calculateEffectiveSpyLevel(targetWatchtowerLevel, targetAssignedSpies);
+                                    
+                                    const effectiveSpyLevel = m.spyLevel || 1;
+                                    const depth = calculateIntelDepth(effectiveSpyLevel, targetSpyLevel);
+
+                                    // Gather intel snapshot based on depth
+                                    let intel = null;
+                                    if (depth !== 'FAILED') {
+                                        intel = {
+                                            resources: { ...targetState.resources },
+                                            buildings: (depth === 'STANDARD' || depth === 'FULL') ? { ...targetState.buildings } : null,
+                                            units: (depth === 'FULL') ? { ...targetState.units } : null
+                                        };
+                                    }
+
+                                    // Create a notification for the player
+                                    const reportId = 'spy_' + Date.now();
+                                    const report = {
+                                        id: reportId,
+                                        userId: m.ownerId,
+                                        text: `Spy Report: ${m.targetAreaId}`,
+                                        createdAt: new Date().toISOString(),
+                                        read: false,
+                                        payload: {
+                                            type: 'spy_report',
+                                            targetAreaId: m.targetAreaId,
+                                            depth,
+                                            success: depth !== 'FAILED',
+                                            intel
+                                        }
+                                    };
+
+                                    const user = users[m.ownerId];
+                                    if (user) {
+                                        user.notifications = user.notifications || [];
+                                        user.notifications.push(report);
+                                    }
+
+                                    // If successful, add an active spy to the target area
+                                    if (depth !== 'FAILED') {
+                                        targetState.activeSpies = targetState.activeSpies || [];
+                                        // Remove any existing spy from this user in this area
+                                        targetState.activeSpies = targetState.activeSpies.filter(s => s.ownerId !== m.ownerId);
+                                        
+                                        targetState.activeSpies.push({
+                                            ownerId: m.ownerId,
+                                            originAreaId: m.originAreaId,
+                                            spyLevel: effectiveSpyLevel,
+                                            depth: depth,
+                                            ticksRemaining: 3600, // 1 hour of active intel
+                                            totalTicks: 3600
+                                        });
+                                    }
+
+                                    console.log(`Mission ${m.id} (Espionage) completed for area ${m.originAreaId}`);
                                 }
                             } catch (err) {
                                 console.error('Error resolving mission', err);
@@ -1009,12 +1119,12 @@ app.post('/api/register', async (req, res) => {
     if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
     if (Object.values(users).some(u => u.username === username)) return res.status(400).json({ error: 'User exists' });
     const id = crypto.randomUUID();
-    // Initialize user with inventory and one civilization cart (TradeCart)
+    // Initialize user with inventory and one claim cart (ClaimCart)
     const inventory = { resources: {}, units: {}, cartContents: {} };
     Object.values(ResourceEnum).forEach(r => inventory.resources[r] = 0);
     Object.values(UnitTypeEnum).forEach(u => inventory.units[u] = 0);
-    // Give one TradeCart containing the starting goods
-    inventory.units[UnitTypeEnum.TradeCart] = 1;
+    // Give one Claim Cart containing the starting goods
+    inventory.units[UnitTypeEnum.ClaimCart] = 1;
     // Starter cart: resources players receive on claim
     inventory.cartContents = {
         [ResourceEnum.Food]: 1000,
@@ -1025,7 +1135,7 @@ app.post('/api/register', async (req, res) => {
     inventory.units[UnitTypeEnum.Villager] = 10;
 
     const hash = await bcrypt.hash(password, 10);
-    users[id] = { id, username, password: hash, inventory, researchedTechs: [], activeResearch: null, messages: [] };
+    users[id] = { id, username, password: hash, inventory, researchedTechs: [], activeResearch: null, messages: [], notifications: [] };
     try { await saveGameState(); } catch (e) { /* logged in helper */ }
     return res.json({ success: true, id, username });
 });
@@ -1076,6 +1186,17 @@ app.get('/api/user/me', (req, res) => {
     return res.json(safeUser);
 });
 
+// Public runtime configuration (safe subset)
+app.get('/api/config', (req, res) => {
+    try {
+        return res.json({
+            maxUnitQueue: MAX_UNIT_QUEUE
+        });
+    } catch (err) {
+        return res.status(500).json({ error: 'Failed to read config' });
+    }
+});
+
 // Create Test Account (returns token)
 app.post('/api/create-test-account', async (req, res) => {
     // Generate a friendlier test username from a small name pool plus a numeric suffix
@@ -1092,22 +1213,24 @@ app.post('/api/create-test-account', async (req, res) => {
     // Seed base resources so test accounts can immediately start common research
     Object.values(ResourceEnum).forEach(r => inventory.resources[r] = 0);
     Object.values(UnitTypeEnum).forEach(u => inventory.units[u] = 0);
-    inventory.units[UnitTypeEnum.TradeCart] = 1;
+    inventory.units[UnitTypeEnum.ClaimCart] = 1;
     // Give larger starter stock to avoid "Insufficient" errors for research/start
     inventory.cartContents = {
         [ResourceEnum.Food]: 5000,
         [ResourceEnum.Timber]: 2000,
-        [ResourceEnum.Stone]: 2000,
-        [ResourceEnum.Gold]: 500
+        [ResourceEnum.Stone]: 2000
     };
     // Also seed a small amount directly into inventory.resources for convenience
     inventory.resources[ResourceEnum.Timber] = 500;
     inventory.resources[ResourceEnum.Stone] = 300;
+    inventory.resources[ResourceEnum.Planks] = 1000;
+    inventory.resources[ResourceEnum.Steel] = 200;
+    inventory.resources[ResourceEnum.Knowledge] = 1000;
     // Give demo villagers equal to starting population for consistency
     inventory.units[UnitTypeEnum.Villager] = 30;
 
     const hash = await bcrypt.hash(password, 10);
-    users[id] = { id, username, password: hash, inventory, researchedTechs: [], activeResearch: null, messages: [] };
+    users[id] = { id, username, password: hash, inventory, researchedTechs: [], activeResearch: null, messages: [], notifications: [] };
     const token = crypto.randomBytes(24).toString('hex');
     tokens[token] = id;
     try { await saveGameState(); } catch (e) { }
@@ -1186,8 +1309,9 @@ app.get('/api/espionage/reports', (req, res) => {
     }
 
     // Also include spy reports from notifications
-    if (notifications[userId]) {
-        notifications[userId].forEach(n => {
+    const user = users[userId];
+    if (user && user.notifications) {
+        user.notifications.forEach(n => {
             if (n.payload && n.payload.type === 'spy_report') {
                 reports.push({
                     id: n.id,
@@ -1195,6 +1319,7 @@ app.get('/api/espionage/reports', (req, res) => {
                     targetAreaId: n.payload.targetAreaId,
                     depth: n.payload.depth,
                     success: n.payload.success,
+                    intel: n.payload.intel,
                     timestamp: n.createdAt
                 });
             }
@@ -1207,6 +1332,31 @@ app.get('/api/espionage/reports', (req, res) => {
     res.json({ reports });
 });
 
+// Return active spy entries for the requesting user (or all if admin)
+app.get('/api/espionage/active', (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Admins can request full listing
+    if (checkAdmin(req, res)) {
+        const out = Object.entries(areaStates).map(([areaId, state]) => ({ areaId, activeSpies: state.activeSpies || [] }));
+        return res.json({ active: out });
+    }
+
+    // Normal users: return only spies owned by them
+    const ownedSpies = [];
+    Object.entries(areaStates).forEach(([areaId, state]) => {
+        const spies = (state.activeSpies || []).filter(s => s.ownerId === userId).map(s => ({ depth: s.depth, ticksRemaining: s.ticksRemaining }));
+        if (spies.length) ownedSpies.push({ areaId, spies });
+    });
+    // Also include any notifications about spy reports for context
+    const user = users[userId];
+    const userNotifs = (user && user.notifications ? user.notifications : [])
+        .filter(n => n.payload && n.payload.type === 'spy_report')
+        .map(n => ({ id: n.id, payload: n.payload, createdAt: n.createdAt }));
+    return res.json({ active: ownedSpies, notifications: userNotifs });
+});
+
 app.get('/api/espionage/intel/:targetAreaId', (req, res) => {
     const userId = authFromReq(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
@@ -1215,34 +1365,44 @@ app.get('/api/espionage/intel/:targetAreaId', (req, res) => {
     const targetState = areaStates[targetAreaId];
     if (!targetState) return res.status(404).json({ error: 'Target area not found' });
 
-    // Find user's best Watchtower level
-    let maxSpyLevel = 0;
-    for (const [areaId, state] of Object.entries(areaStates)) {
-        let areaMeta = null;
-        for (const r of world.regions) {
-            const a = r.areas.find(x => x.id === areaId);
-            if (a) { areaMeta = a; break; }
+    // Check for active spy from this user (must be authenticated and have a positive ticksRemaining)
+    if (!users[userId]) return res.status(401).json({ error: 'Unauthorized' });
+    const activeSpy = (targetState.activeSpies || []).find(s => s.ownerId === userId && (typeof s.ticksRemaining === 'undefined' || s.ticksRemaining > 0));
+    if (!activeSpy) {
+        // Check if a spy is currently traveling to this area from any of the user's areas
+        let travelingMission = null;
+        for (const [originId, originState] of Object.entries(areaStates)) {
+            if (originState.ownerId === userId && originState.missions) {
+                const m = originState.missions.find(m => m.targetAreaId === targetAreaId && m.type === 'Espionage');
+                if (m) {
+                    travelingMission = m;
+                    break;
+                }
+            }
         }
-        if (areaMeta && areaMeta.ownerId === userId) {
-            const watchtowerLevel = state.buildings['Watchtower'] || 0;
-            const assignedSpies = state.assignments['Watchtower'] || 0;
-            const effective = calculateEffectiveSpyLevel(watchtowerLevel, assignedSpies);
-            if (effective > maxSpyLevel) maxSpyLevel = effective;
+        
+        if (travelingMission) {
+            return res.json({ 
+                status: 'traveling', 
+                ticksRemaining: travelingMission.ticksRemaining 
+            });
         }
+        return res.status(403).json({ error: 'No active spy in this area. Send a spy first.' });
     }
 
-    // Target's counter-spy level
-    const targetWatchtowerLevel = targetState.buildings['Watchtower'] || 0;
-    const targetAssignedSpies = targetState.assignments['Watchtower'] || 0;
-    const targetSpyLevel = calculateEffectiveSpyLevel(targetWatchtowerLevel, targetAssignedSpies);
+    const depth = activeSpy.depth;
+    const intel = { depth, ticksRemaining: activeSpy.ticksRemaining };
 
-    const depth = calculateIntelDepth(maxSpyLevel, targetSpyLevel);
-
-    if (depth === 'FAILED') {
-        return res.json({ depth, message: 'Infiltration Failed. Spy is captured/killed.' });
-    }
-
-    const intel = { depth };
+    // Compute detection probabilities
+    const perTick = (depth === 'FULL') ? 0.02 : (depth === 'STANDARD' ? 0.01 : 0.005);
+    const totalTicks = activeSpy.totalTicks || 3600;
+    const ticksPassed = Math.max(0, totalTicks - (activeSpy.ticksRemaining || 0));
+    
+    intel.detection = {
+        perTick: perTick,
+        perTickPercent: `${(perTick * 100).toFixed(2)}%`,
+        riskPercent: `${((1 - Math.pow(1 - perTick, ticksPassed)) * 100).toFixed(2)}%`
+    };
     
     // BASIC: Resources only
     if (depth === 'BASIC' || depth === 'STANDARD' || depth === 'FULL') {
@@ -1259,7 +1419,8 @@ app.get('/api/espionage/intel/:targetAreaId', (req, res) => {
         intel.units = targetState.units;
     }
 
-    res.json(intel);
+    console.log(`Providing espionage intel for user=${userId} on target=${targetAreaId} depth=${depth}`);
+    return res.json(intel);
 });
 
 app.post('/api/espionage/spy', (req, res) => {
@@ -1268,7 +1429,19 @@ app.post('/api/espionage/spy', (req, res) => {
     const { targetAreaId, originAreaId } = req.body;
 
     const state = areaStates[originAreaId];
-    if (!state || state.ownerId !== userId) return res.status(403).json({ error: 'Invalid origin' });
+    // If there's no active AreaState for this origin, check persisted owner mapping to give a clearer error
+    if (!state) {
+        if (savedAreaOwners[originAreaId] && savedAreaOwners[originAreaId] === userId) {
+            console.log(`User ${userId} attempted to send spy from ${originAreaId} but area state is not loaded`);
+            return res.status(400).json({ error: 'Origin area not active on server (state missing). Try reloading your area or reconnecting.' });
+        }
+        console.log(`Invalid spy origin attempt: user=${userId} origin=${originAreaId} (no state, not owned)`);
+        return res.status(403).json({ error: 'Invalid origin' });
+    }
+    if (state.ownerId !== userId) {
+        console.log(`Invalid spy origin attempt: user=${userId} origin=${originAreaId} (owned by ${state.ownerId})`);
+        return res.status(403).json({ error: 'Invalid origin' });
+    }
 
     const watchtowerLevel = (state.buildings && state.buildings['Watchtower']) || 0;
     if (watchtowerLevel <= 0) return res.status(400).json({ error: 'Watchtower required' });
@@ -1282,28 +1455,54 @@ app.post('/api/espionage/spy', (req, res) => {
     const assignedSpies = state.assignments['Watchtower'] || 0;
     const effectiveSpyLevel = calculateEffectiveSpyLevel(watchtowerLevel, assignedSpies);
     
-    const depth = calculateIntelDepth(effectiveSpyLevel, targetSpyLevel);
+    // Calculate travel time
+    const travelTicks = computeTravelTicks(originAreaId, targetAreaId, {});
 
-    // Create a notification for the player
-    const reportId = 'spy_' + Date.now();
-    const report = {
-        id: reportId,
-        userId,
-        text: `Spy Report: ${targetAreaId}`,
-        createdAt: new Date().toISOString(),
-        read: false,
-        payload: {
-            type: 'spy_report',
-            targetAreaId,
-            depth,
-            success: depth !== 'FAILED'
-        }
-    };
+    // Create an Espionage mission
+    const missionId = `spy_${Date.now()}`;
+    state.missions = state.missions || [];
+    state.missions.push({
+        id: missionId,
+        type: 'Espionage',
+        ownerId: userId,
+        originAreaId: originAreaId,
+        targetAreaId: targetAreaId,
+        spyLevel: effectiveSpyLevel,
+        ticksRemaining: travelTicks,
+        totalTicks: travelTicks,
+        status: 'Traveling'
+    });
 
-    if (!notifications[userId]) notifications[userId] = [];
-    notifications[userId].push(report);
+    try { saveGameState().catch(()=>{}); } catch(e) {}
 
-    res.json({ success: true, depth, message: depth === 'FAILED' ? 'Spy was caught!' : 'Spy successfully infiltrated.' });
+    res.json({ success: true, missionId, travelTicks, message: `Spy dispatched to ${targetAreaId}. Arrival in ${travelTicks} ticks.` });
+});
+
+// Recall an active spy (remove from the target area's activeSpies)
+app.post('/api/espionage/recall', (req, res) => {
+    const userId = authFromReq(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { targetAreaId } = req.body || {};
+    if (!targetAreaId) return res.status(400).json({ error: 'Missing targetAreaId' });
+
+    const targetState = areaStates[targetAreaId];
+    if (!targetState || !targetState.activeSpies) return res.status(404).json({ error: 'No active spies in target area' });
+
+    const idx = targetState.activeSpies.findIndex(s => s.ownerId === userId);
+    if (idx === -1) return res.status(404).json({ error: 'No active spy for user in this area' });
+
+    // Remove the spy (recall)
+    const removed = targetState.activeSpies.splice(idx, 1);
+    try { saveGameState().catch(()=>{}); } catch(e) {}
+
+    // Notify user via notifications array
+    const user = users[userId];
+    if (user) {
+        user.notifications = user.notifications || [];
+        user.notifications.push({ id: 'spy_recall_' + Date.now(), userId, createdAt: new Date().toISOString(), read: false, payload: { type: 'spy_recall', targetAreaId } });
+    }
+
+    return res.json({ success: true, message: 'Spy recalled', removed: removed[0] || null });
 });
 
 // Mark notification read
@@ -1439,7 +1638,10 @@ app.get('/admin', (req, res) => {
                             <span id="loginMsg" style="margin-left:8px;color:#666"></span>
                         </div>
                         <div id="actions" style="display:none;margin-top:12px">
-                            <div style="margin-bottom:8px"><button id="completeBtn">Complete All Buildings</button></div>
+                            <div style="margin-bottom:8px">
+                                <button id="completeBtn">Complete All Buildings</button>
+                                <button id="completeResearchBtn">Complete Active Research</button>
+                            </div>
                             <div style="margin-bottom:8px">Grant resources / units:
                                 <input id="gUser" placeholder="userId (optional)"/>
                                 <input id="gArea" placeholder="areaId (optional)"/>
@@ -1474,6 +1676,12 @@ app.get('/admin', (req, res) => {
 
                         document.getElementById('completeBtn').addEventListener('click', async () => {
                             const r = await fetch('/api/admin/complete-buildings', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify({}) });
+                            const j = await r.json(); document.getElementById('out').textContent = JSON.stringify(j, null, 2);
+                        });
+
+                        document.getElementById('completeResearchBtn').addEventListener('click', async () => {
+                            const userId = document.getElementById('gUser').value || undefined;
+                            const r = await fetch('/api/admin/complete-research', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify({ userId }) });
                             const j = await r.json(); document.getElementById('out').textContent = JSON.stringify(j, null, 2);
                         });
 
@@ -1557,6 +1765,30 @@ app.post('/api/admin/complete-buildings', async (req, res) => {
     }
     try { await saveGameState(); } catch (e) { /* ignore save errors */ }
     return res.json({ success: true, completed: totalCompleted });
+});
+
+app.post('/api/admin/complete-research', async (req, res) => {
+    if (!checkAdmin(req, res)) return;
+    const { userId } = req.body || {};
+    
+    const processUser = (user) => {
+        if (!user || !user.activeResearch) return;
+        const techId = user.activeResearch.techId;
+        user.techLevels = user.techLevels || {};
+        user.techLevels[techId] = (user.techLevels[techId] || 0) + 1;
+        user.researchedTechs = Object.keys(user.techLevels);
+        user.activeResearch = null;
+    };
+
+    if (userId) {
+        if (!users[userId]) return res.status(404).json({ error: 'User not found' });
+        processUser(users[userId]);
+    } else {
+        Object.values(users).forEach(processUser);
+    }
+    
+    try { await saveGameState(); } catch (e) { }
+    return res.json({ success: true });
 });
 
 // Grant resources to a player (inventory) or to an area
@@ -1807,6 +2039,7 @@ app.post('/api/research/start', async (req, res) => {
     const currentLevel = user.techLevels[techId] || 0;
     const def = ALL_RESEARCH[techId];
 
+    if (def.maxLevel && currentLevel >= def.maxLevel) return res.status(400).json({ error: 'Research already at maximum level' });
     if (def.type === 'One-Off' && currentLevel > 0) return res.status(400).json({ error: 'Already researched' });
     if (user.activeResearch) return res.status(400).json({ error: 'Another research is active' });
 
@@ -1986,6 +2219,8 @@ app.post('/api/research/start', async (req, res) => {
         techId, 
         level: currentLevel + 1,
         startedAt: now, 
+        completesAt: now + (adjustedTicks * 1000),
+        durationSeconds: adjustedTicks,
         ticksRemaining: adjustedTicks, 
         totalTicks: adjustedTicks 
     };
@@ -2022,7 +2257,7 @@ app.post('/api/research/grant', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const body = req.body || {};
     const techId = body.techId || body.id || null;
-    if (!techId || !RESEARCH_DEFS[techId]) return res.status(400).json({ error: 'Invalid tech id' });
+    if (!techId || !ALL_RESEARCH[techId]) return res.status(400).json({ error: 'Invalid tech id' });
     const user = users[userId];
     if (!user) return res.status(404).json({ error: 'User not found' });
     
@@ -2066,10 +2301,23 @@ app.get('/api/areas', (req, res) => {
                         const effectiveSpyLevel = calculateEffectiveSpyLevel(watchtowerLevel, assignedSpies);
                         const radius = getDetectionRadius(effectiveSpyLevel);
                         
-                        // Find any expedition within radius that isn't owned by the player
-                        const detected = activeExpeditions.find(ex => {
+                        // Find any mission within radius that isn't owned by the player
+                        // Collect all active missions from all areas
+                        const allActiveMissions = [];
+                        Object.values(areaStates).forEach(s => {
+                            if (s.missions) {
+                                s.missions.forEach(m => {
+                                    if (m.status === 'Traveling' || m.status === 'Returning') {
+                                        allActiveMissions.push(m);
+                                    }
+                                });
+                            }
+                        });
+
+                        const detected = allActiveMissions.find(ex => {
                             if (ex.ownerId === userId) return false;
-                            const dist = calculateDistance(a.id, ex.currentLocation || ex.originAreaId);
+                            // Simple distance check for now
+                            const dist = calculateDistance(a.id, ex.targetAreaId);
                             return dist <= radius;
                         });
                         
@@ -2084,7 +2332,14 @@ app.get('/api/areas', (req, res) => {
             }
 
             // Include any salvage present on the tile so the frontend can render icons
-            try { out.salvagePool = (areaStates[a.id] && areaStates[a.id].salvagePool) ? areaStates[a.id].salvagePool : {}; } catch (e) { out.salvagePool = {}; }
+            // Salvage is considered public information (ruins/battlefield leftovers)
+            const state = areaStates[a.id];
+            if (state && state.salvagePool && Object.keys(state.salvagePool).length > 0) {
+                out.salvagePool = state.salvagePool;
+            } else {
+                out.salvagePool = {};
+            }
+
             if (includeOwners) out.ownerName = resolvedOwnerId ? (users[resolvedOwnerId] ? users[resolvedOwnerId].username : null) : null;
             return out;
         })
@@ -2101,9 +2356,10 @@ app.get('/api/account', (req, res) => {
 
     // Return basic user info and inventory (clone to avoid external mutation)
     const safeInventory = JSON.parse(JSON.stringify(user.inventory || {}));
-    // Ensure units and cartContents exist and include TradeCart count
+    // Ensure units and cartContents exist
     safeInventory.units = safeInventory.units || {};
-    if (typeof safeInventory.units[UnitTypeEnum.TradeCart] === 'undefined') safeInventory.units[UnitTypeEnum.TradeCart] = 0;
+    if (typeof safeInventory.units[UnitTypeEnum.CargoWagon] === 'undefined') safeInventory.units[UnitTypeEnum.CargoWagon] = 0;
+    if (typeof safeInventory.units[UnitTypeEnum.LargeCargoWagon] === 'undefined') safeInventory.units[UnitTypeEnum.LargeCargoWagon] = 0;
     safeInventory.cartContents = safeInventory.cartContents || {};
     return res.json({ id: user.id, username: user.username, inventory: safeInventory });
 });
@@ -2121,7 +2377,7 @@ app.get('/api/area/:areaId', async (req, res) => {
     }
     if (!areaMeta) return res.status(404).json({ error: 'Area not found' });
 
-    if (areaMeta.ownerId && areaMeta.ownerId === userId) {
+    if (userId && users[userId] && areaMeta.ownerId && areaMeta.ownerId === userId) {
         // Owned by requester: return full AreaState (or areaStates)
         const state = areaStates[areaId] || gameState;
 
@@ -2242,7 +2498,7 @@ app.get('/api/area/:areaId', async (req, res) => {
                 if (assigned > 0) productionPerSecond[ResourceEnum.Coal] = perWorker * assigned;
                 perWorkerRates = { [ResourceEnum.Coal]: perWorker };
             }
-            if (id === 'BlastFurnace' && level > 0) {
+            if (id === 'SteelWorks' && level > 0) {
                 const perWorker = getOutput(PRODUCTION_RATES.steelPerWorkerPerSecond, level, 1);
                 if (assigned > 0) productionPerSecond[ResourceEnum.Steel] = perWorker * assigned;
                 perWorkerRates = { [ResourceEnum.Steel]: perWorker };
@@ -2255,13 +2511,7 @@ app.get('/api/area/:areaId', async (req, res) => {
             if (id === 'Farm' && level > 0) {
                 const perWorker = getOutput(PRODUCTION_RATES.foodPerWorkerPerSecond, level, 1);
                 if (assigned > 0) productionPerSecond[ResourceEnum.Food] = perWorker * assigned;
-                if (level >= 5) {
-                    const hidesPerWorker = getOutput(PRODUCTION_RATES.hidesPerWorkerPerSecond, level, 1);
-                    if (assigned > 0) productionPerSecond[ResourceEnum.Hides] = hidesPerWorker * assigned;
-                    perWorkerRates = { [ResourceEnum.Food]: perWorker, [ResourceEnum.Hides]: hidesPerWorker };
-                } else {
-                    perWorkerRates = { [ResourceEnum.Food]: perWorker };
-                }
+                perWorkerRates = { [ResourceEnum.Food]: perWorker };
             }
             if (id === 'StonePit' && level > 0) {
                 const perWorker = getOutput(PRODUCTION_RATES.stonePitPerWorkerPerSecond, level, 1);
@@ -2356,6 +2606,7 @@ app.get('/api/area/:areaId', async (req, res) => {
                 timeRemaining: item.completesAt ? `${Math.max(0, Math.floor((item.completesAt - Date.now()) / 1000))}s` : `${Math.max(0, Math.floor(item.timeRemaining || 0))}s`
             })),
             buildings: buildingsWithCosts,
+            techLevels: users[areaMeta.ownerId]?.techLevels || {},
             units: Object.entries(state.units).map(([type, count]) => ({ type, count })),
             assignments: state.assignments || {},
             idleReasons: state.idleReasons || {},
@@ -2375,7 +2626,64 @@ app.get('/api/area/:areaId', async (req, res) => {
         });
     }
 
-    // Not owned: only reveal owner (if any) and name
+    // Not owned: check for active spies from this user
+    const targetState = areaStates[areaId];
+    if (userId && users[userId] && targetState && targetState.activeSpies) {
+        const activeSpy = targetState.activeSpies.find(s => s.ownerId === userId && (typeof s.ticksRemaining === 'undefined' || s.ticksRemaining > 0));
+        if (activeSpy) {
+            const intel = {
+                owned: false,
+                id: areaMeta.id,
+                name: areaMeta.name,
+                ownerId: areaMeta.ownerId,
+                ownerName: areaMeta.ownerId ? (users[areaMeta.ownerId] ? users[areaMeta.ownerId].username : null) : null,
+                spyIntel: true,
+                intelDepth: activeSpy.depth,
+                ticksRemaining: activeSpy.ticksRemaining
+            };
+
+            // BASIC: Resources only
+            if (activeSpy.depth === 'BASIC' || activeSpy.depth === 'STANDARD' || activeSpy.depth === 'FULL') {
+                intel.resources = targetState.resources;
+                intel.stats = {
+                    currentPop: targetState.population,
+                    maxPop: targetState.housingCapacity,
+                    approval: targetState.approval
+                };
+            }
+
+            // STANDARD: + Building Levels
+            if (activeSpy.depth === 'STANDARD' || activeSpy.depth === 'FULL') {
+                intel.buildings = Object.entries(targetState.buildings || {}).map(([id, level]) => {
+                    const config = BUILDING_CONFIG[id] || {};
+                    return { id, name: config.name, level };
+                });
+            }
+
+            // FULL: + Exact Unit counts
+            if (activeSpy.depth === 'FULL') {
+                intel.units = Object.entries(targetState.units || {}).map(([type, count]) => ({ type, count }));
+            }
+
+            // Include detection probabilities so client can decide to recall
+            try {
+                const perTick = (activeSpy.depth === 'FULL') ? 0.02 : (activeSpy.depth === 'STANDARD' ? 0.01 : 0.005);
+                const totalTicks = activeSpy.totalTicks || 3600;
+                const ticksPassed = Math.max(0, totalTicks - (activeSpy.ticksRemaining || 0));
+                intel.detection = {
+                    perTick,
+                    perTickPercent: `${(perTick * 100).toFixed(2)}%`,
+                    riskPercent: `${((1 - Math.pow(1 - perTick, ticksPassed)) * 100).toFixed(2)}%`
+                };
+            } catch (e) { /* ignore */ }
+
+            console.log(`Providing spy intel for user=${userId} on area=${areaId} depth=${activeSpy.depth}`);
+            return res.json(intel);
+        }
+    }
+
+    // Default: minimal public metadata only
+    console.log(`Area detail requested by user=${userId || 'anonymous'} for area=${areaId} - returning minimal metadata`);
     return res.json({ owned: false, id: areaMeta.id, name: areaMeta.name, ownerId: areaMeta.ownerId, ownerName: areaMeta.ownerId ? (users[areaMeta.ownerId] ? users[areaMeta.ownerId].username : null) : null });
 });
 
@@ -2400,6 +2708,16 @@ app.post('/api/area/:areaId/collect-salvage', async (req, res) => {
         return res.json({ success: true, transferred: {}, message: 'No salvage to collect' });
     }
 
+    // FOG OF WAR: Must own the area OR have an active spy to collect salvage
+    // UNOWNED areas do not require a spy for salvage collection.
+    const isOwner = targetMeta.ownerId === userId;
+    const isUnowned = !targetMeta.ownerId;
+    const hasActiveSpy = targetState.activeSpies && targetState.activeSpies.some(s => s.ownerId === userId);
+    
+    if (!isOwner && !isUnowned && !hasActiveSpy) {
+        return res.status(403).json({ error: 'You must have an active spy in the area to collect salvage from an owned territory.' });
+    }
+
     // Validate collector area ownership
     if (!collectorAreaId) return res.status(400).json({ error: 'collectorAreaId required' });
     // Find collector area metadata
@@ -2416,38 +2734,35 @@ app.post('/api/area/:areaId/collect-salvage', async (req, res) => {
 
 
     // Authorization checks: ensure collector within allowed travel range and has transport capacity
-    const MAX_COLLECT_TICKS = parseInt(process.env.MAX_COLLECT_TICKS || '60', 10);
+    const MAX_COLLECT_TICKS = parseInt(process.env.MAX_COLLECT_TICKS || '300', 10);
 
     // Compute travel ticks from collector -> target using group's units
     const travelTicks = computeTravelTicks(collectorAreaId, targetAreaId, collectorState.units || {});
-    if (travelTicks > MAX_COLLECT_TICKS) return res.status(403).json({ error: 'Collector area too far to send transport' });
+    if (travelTicks > MAX_COLLECT_TICKS) return res.status(403).json({ error: `Collector area too far to send transport (${travelTicks} ticks, max ${MAX_COLLECT_TICKS})` });
 
-    // Compute total available carry capacity in collector's units (SupplyWagon.carryCapacity and TradeCart default)
-    const TRADE_CART_CAPACITY = parseInt(process.env.TRADE_CART_CAPACITY || '500', 10);
+    // Compute total available carry capacity in collector's units (CargoWagon and LargeCargoWagon)
     let totalCapacity = 0;
     try {
+        const user = users[userId];
+        const wagonReinforceLvl = (user && user.techLevels && user.techLevels['Wagon Reinforce']) || 0;
+        const capacityMult = 1 + (wagonReinforceLvl * 0.05);
+
         Object.entries(collectorState.units || {}).forEach(([ut, cnt]) => {
             const cfg = UNIT_CONFIG[ut];
             const n = Math.max(0, cnt || 0);
-            if (!cfg) {
-                // Fallback: treat TradeCart specially if not in UNIT_CONFIG
-                if (ut === UnitTypeEnum.TradeCart) totalCapacity += TRADE_CART_CAPACITY * n;
-                return;
+            if (cfg && cfg.carryCapacity) {
+                totalCapacity += Math.floor(cfg.carryCapacity * n * capacityMult);
             }
-            if (cfg.carryCapacity) totalCapacity += (cfg.carryCapacity || 0) * n;
-            if (ut === UnitTypeEnum.TradeCart) totalCapacity += TRADE_CART_CAPACITY * n;
         });
     } catch (e) { console.error('Capacity calc error', e); }
 
-    if (totalCapacity <= 0) return res.status(403).json({ error: 'No transport capacity available in collector area (no carts/wagons)' });
+    if (totalCapacity <= 0) return res.status(403).json({ error: 'No transport capacity available in collector area (no wagons)' });
 
     // Transfer salvage to collector area's resources up to totalCapacity.
     const transferred = {};
     const salvage = Object.assign({}, targetState.salvagePool || {});
-    const totalSalvageAmount = Object.values(salvage).reduce((a,b) => a + (b||0), 0);
-    if (totalSalvageAmount <= 0) return res.json({ success: true, transferred: {}, message: 'No salvage to collect' });
-
-    const fraction = Math.min(1, totalCapacity / totalSalvageAmount);
+    const totalResourceAmount = Object.values(salvage).filter((v, i) => Object.keys(salvage)[i] !== '__battle_wrecks').reduce((a,b) => a + (b||0), 0);
+    const fraction = totalResourceAmount > 0 ? Math.min(1, totalCapacity / totalResourceAmount) : 1;
     Object.entries(salvage).forEach(([resKey, amt]) => {
         const available = Math.max(0, Math.floor(amt || 0));
         if (!available) return;
@@ -2457,25 +2772,35 @@ app.post('/api/area/:areaId/collect-salvage', async (req, res) => {
         transferred[resKey] = toTransfer;
         // Subtract transferred from target salvagePool
         targetState.salvagePool[resKey] = Math.max(0, (targetState.salvagePool[resKey] || 0) - toTransfer);
-        // Special handling for battle wrecks: potential refugee arrival
-        if (resKey === '__battle_wrecks' && toTransfer > 0) {
+    });
+
+    // Special handling for battle wrecks: potential refugee arrival
+    const battleWrecks = salvage['__battle_wrecks'] || 0;
+    if (battleWrecks > 0) {
+        const wrecksToTransfer = Math.ceil(battleWrecks * fraction);
+        if (wrecksToTransfer > 0) {
+            targetState.salvagePool['__battle_wrecks'] = Math.max(0, battleWrecks - wrecksToTransfer);
             try {
                 const owner = users[userId];
                 const hasOpenBorders = owner && owner.techLevels && owner.techLevels['Open Borders Policy'];
                 if (hasOpenBorders) {
-                    // For each wreck transferred, 20% chance to get 1-3 refugees
-                    for (let i = 0; i < toTransfer; i++) {
+                    let totalRefugees = 0;
+                    for (let i = 0; i < wrecksToTransfer; i++) {
                         if (Math.random() <= 0.20) {
                             const refugees = 1 + Math.floor(Math.random() * 3);
-                            collectorState.population = (collectorState.population || 0) + refugees;
-                            collectorState.units = collectorState.units || {};
-                            collectorState.units[UnitTypeEnum.Villager] = (collectorState.units[UnitTypeEnum.Villager] || 0) + refugees;
+                            totalRefugees += refugees;
                         }
+                    }
+                    if (totalRefugees > 0) {
+                        collectorState.population = (collectorState.population || 0) + totalRefugees;
+                        collectorState.units = collectorState.units || {};
+                        collectorState.units[UnitTypeEnum.Villager] = (collectorState.units[UnitTypeEnum.Villager] || 0) + totalRefugees;
+                        transferred['Refugees'] = totalRefugees;
                     }
                 }
             } catch (e) { console.error('Refugee processing error', e); }
         }
-    });
+    }
 
     // Cleanup zeroed entries
     Object.keys(targetState.salvagePool || {}).forEach(k => { if (!targetState.salvagePool[k]) delete targetState.salvagePool[k]; });
@@ -2499,14 +2824,14 @@ app.post('/api/area/:areaId/claim', async (req, res) => {
     if (!areaMeta) return res.status(404).json({ error: 'Area not found' });
     if (areaMeta.ownerId) return res.status(400).json({ error: 'Area already owned' });
 
-    // Ensure user exists and has a civilization cart (TradeCart)
+    // Ensure user exists and has a claim cart (ClaimCart)
     const user = users[userId];
     if (!user || !user.inventory) return res.status(500).json({ error: 'User inventory missing' });
-    const unitCount = user.inventory.units[UnitTypeEnum.TradeCart] || 0;
-    if (unitCount < 1) return res.status(400).json({ error: 'No civilization cart available to claim area' });
+    const unitCount = user.inventory.units[UnitTypeEnum.ClaimCart] || 0;
+    if (unitCount < 1) return res.status(400).json({ error: 'No claim cart available to claim area' });
 
     // Consume one cart
-    user.inventory.units[UnitTypeEnum.TradeCart] = unitCount - 1;
+    user.inventory.units[UnitTypeEnum.ClaimCart] = unitCount - 1;
 
     // Optional rename supplied by client
     const { name } = req.body || {};
@@ -2517,6 +2842,7 @@ app.post('/api/area/:areaId/claim', async (req, res) => {
     }
     areaMeta.ownerId = userId;
     const newState = new AreaState(areaMeta.name);
+    newState.ownerId = userId;
     // Start claimed area with only the civilization cart's resources.
     // Clear the area's default starter resources so the cart determines initial stock.
     Object.keys(newState.resources).forEach(k => newState.resources[k] = 0);
@@ -2558,6 +2884,7 @@ app.post('/api/area/:areaId/claim', async (req, res) => {
     } catch (e) { /* ignore */ }
 
     areaStates[areaId] = newState;
+    savedAreaOwners[areaId] = userId;
     try { await saveGameState(); } catch (e) { }
     return res.json({ success: true, areaId, ownerId: userId, areaName: areaMeta.name, transferred: cart, remainingUnits: user.inventory.units });
 });
@@ -2614,6 +2941,21 @@ app.post('/api/area/:areaId/assign', async (req, res) => {
     // Prevent assigning villagers to the Storehouse (it represents housing/storage)
     // Note: TownHall IS allowed (for gathering)
     if (baseBuildingId === 'Storehouse') return res.status(400).json({ error: 'Cannot assign villagers to the Storehouse' });
+    // Disallow assignments to espionage/Watchtower — they don't take villager assignments
+    if (baseBuildingId === 'Watchtower') return res.status(400).json({ error: 'Cannot assign villagers to the Watchtower' });
+
+    // Special-case: University uses Scholars as staff rather than Villagers — handle separately
+    if (baseBuildingId === 'University') {
+        const scholarCount = state.units[UnitTypeEnum.Scholar] || 0;
+        const currentForThis = state.assignments[buildingId] || 0;
+        // Enforce capacity done earlier; ensure enough scholars available for assignment
+        if (count > scholarCount) return res.status(400).json({ error: 'Not enough Scholars available' });
+        // Apply assignment (scholars remain scholars; we don't convert villagers here)
+        if (!state.assignments) state.assignments = {};
+        if (count === 0) delete state.assignments[buildingId]; else state.assignments[buildingId] = count;
+        try { await saveGameState(); } catch (e) { console.error('Failed to save game state after university assignment', e); return res.status(500).json({ success: false, error: 'Failed to persist assignments' }); }
+        return res.json({ success: true, assignments: state.assignments, idleReasons: state.idleReasons || {}, units: state.units, buildings: Object.keys(state.buildings).map(id => ({ id, level: state.buildings[id] })) });
+    }
 
     // Calculate available villagers (primary unit key is 'Villager')
     const totalVillagers = state.units[UnitTypeEnum.Villager] || 0;
@@ -2631,19 +2973,47 @@ app.post('/api/area/:areaId/assign', async (req, res) => {
     else if (typeof cfg.workforceCap === 'number') maxByConfig = cfg.workforceCap * Math.max(1, level);
     if (count > maxByConfig) return res.status(400).json({ error: `Exceeds max workers for ${buildingId}: ${maxByConfig}` });
 
-    // Apply assignment
+    // Special-case: Library assignments convert idle Villagers into Scholars (and back on unassign)
     if (!state.assignments) state.assignments = {};
-    if (count === 0) delete state.assignments[buildingId]; else state.assignments[buildingId] = count;
-    // Persist change and surface any persistence issues so client can retry
     try {
+        if (baseBuildingId === 'Library') {
+            // Current counts
+            const currScholars = state.units[UnitTypeEnum.Scholar] || 0;
+            const currVillagers = state.units[UnitTypeEnum.Villager] || 0;
+
+            // Desired scholar count is `count` (assigning represents number of Scholars to staff the Library)
+            const desired = count;
+
+            // Enforce capacity (already checked maxByConfig above)
+
+            if (desired > currScholars) {
+                const need = desired - currScholars;
+                if (need > currVillagers) return res.status(400).json({ error: 'Not enough idle villagers to convert to Scholars' });
+                // Convert villagers -> scholars
+                state.units[UnitTypeEnum.Scholar] = currScholars + need;
+                state.units[UnitTypeEnum.Villager] = Math.max(0, currVillagers - need);
+            } else if (desired < currScholars) {
+                const toRevert = Math.min(currScholars - desired, currScholars);
+                // Convert scholars back to villagers
+                state.units[UnitTypeEnum.Scholar] = Math.max(0, currScholars - toRevert);
+                state.units[UnitTypeEnum.Villager] = (state.units[UnitTypeEnum.Villager] || 0) + toRevert;
+            }
+
+            // Persist assigned count for UI display
+            if (desired === 0) delete state.assignments[buildingId]; else state.assignments[buildingId] = desired;
+
+            await saveGameState();
+            return res.json({ success: true, assignments: state.assignments, idleReasons: state.idleReasons || {}, units: state.units, buildings: Object.keys(state.buildings).map(id => ({ id, level: state.buildings[id] })) });
+        }
+
+        // Apply assignment for normal buildings
+        if (count === 0) delete state.assignments[buildingId]; else state.assignments[buildingId] = count;
         await saveGameState();
+        return res.json({ success: true, assignments: state.assignments, idleReasons: state.idleReasons || {}, units: state.units, buildings: Object.keys(state.buildings).map(id => ({ id, level: state.buildings[id] })) });
     } catch (e) {
         console.error('Failed to save game state after assignment:', e);
         return res.status(500).json({ success: false, error: 'Failed to persist assignments' });
     }
-
-    // Return a small snapshot to allow the client to refresh UI without full area refetch
-    return res.json({ success: true, assignments: state.assignments, idleReasons: state.idleReasons || {}, units: state.units, buildings: Object.keys(state.buildings).map(id => ({ id, level: state.buildings[id] })) });
 });
 
 // Upgrade a building on an owned area
@@ -2815,16 +3185,27 @@ app.post('/api/area/:areaId/recruit', async (req, res) => {
     // Check population availability (population acts as free slots)
     const popCostTotal = (unitDef.populationCost || 1) * qty;
     const freePop = Math.max(0, (state.housingCapacity || 0) - (state.population || 0));
-    if (freePop < popCostTotal && lc !== 'scholar') {
+    
+    if (lc === 'scholar') {
+        // Scholars are converted from villagers, so they don't need "free" housing slots,
+        // but they DO need existing villagers to convert.
+        const villagers = state.units[UnitTypeEnum.Villager] || 0;
+        if (villagers < qty) {
+            console.log(`Recruit Failed: Insufficient villagers to convert to scholars. Need ${qty}, have ${villagers}`);
+            return res.status(400).json({ error: `Insufficient villagers to convert. Need ${qty}, have ${villagers}.` });
+        }
+    } else if (freePop < popCostTotal) {
         console.log(`Recruit Failed: Insufficient housing. Need ${popCostTotal}, have ${freePop}`);
         return res.status(400).json({ error: `Insufficient housing capacity. Need ${popCostTotal} free slots, have ${freePop}.` });
     }
 
-    // Prevent multiple simultaneous unit training in the same area: enforce research-like single active training
-    const hasActiveUnitTraining = (state.queue || []).some(it => it && it.type === 'Unit');
-    if (hasActiveUnitTraining) {
-        console.log(`Recruit Failed: Another unit training active in area ${areaId}`);
-        return res.status(400).json({ error: 'Another unit training is already active in this area' });
+    // Allow up to N queued unit training items per area (sequential processing)
+    // Configurable via env var MAX_UNIT_QUEUE or UNIT_QUEUE_MAX (defaults to 5)
+    const MAX_UNIT_QUEUE = parseInt(process.env.MAX_UNIT_QUEUE || process.env.UNIT_QUEUE_MAX || '5', 10) || 5;
+    const unitQueueItems = (state.queue || []).filter(it => it && it.type === 'Unit');
+    if (unitQueueItems.length >= MAX_UNIT_QUEUE) {
+        console.log(`Recruit Failed: Unit training queue full in area ${areaId} (max ${MAX_UNIT_QUEUE})`);
+        return res.status(400).json({ error: `Unit training queue full (max ${MAX_UNIT_QUEUE})` });
     }
 
     // Check resources from the area's stock ONLY

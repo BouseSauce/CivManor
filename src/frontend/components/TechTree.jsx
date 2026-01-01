@@ -3,33 +3,23 @@ import { RESEARCH_DEFS } from '../../core/config/research.js';
 import { BUILDING_CONFIG } from '../../core/config/buildings.js';
 import { GameClient } from '../api/client';
 import ResearchCard from './ResearchCard';
+import { useResearch } from '../hooks/useResearch';
 
 export default function TechTree({ area }) {
+  const { research: researchState, refreshResearch } = useResearch();
+
   // Flatten RESEARCH_DEFS since it is grouped by building
   const flatResearch = {};
-  Object.values(RESEARCH_DEFS).forEach(group => {
+  const sourceDefs = (researchState.defs && Object.keys(researchState.defs).length > 0) ? researchState.defs : RESEARCH_DEFS;
+  
+  Object.values(sourceDefs).forEach(group => {
     Object.assign(flatResearch, group);
   });
-
-  const [researchState, setResearchState] = useState({ researched: [], active: null, available: [], defs: {} });
-
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const r = await GameClient.getResearch();
-        if (mounted) setResearchState(r || { researched: [], active: null, available: [], defs: {} });
-      } catch (e) { console.error('Failed to load research', e); }
-    };
-    load();
-    const t = setInterval(load, 3000);
-    return () => { mounted = false; clearInterval(t); };
-  }, []);
 
   const start = async (techId) => {
     try {
       const r = await GameClient.startResearch(techId);
-      if (r && r.success) setResearchState(prev => ({ ...prev, active: r.active }));
+      if (r && r.success) refreshResearch();
       else alert('Failed to start research');
     } catch (e) { alert('Start research error'); }
   };
@@ -94,6 +84,7 @@ export default function TechTree({ area }) {
             def={def}
             researched={researchState.researched?.includes(id)}
             researchedList={researchState.researched || []}
+            techLevels={researchState.techLevels || {}}
             active={researchState.active}
             onStart={start}
             area={area}

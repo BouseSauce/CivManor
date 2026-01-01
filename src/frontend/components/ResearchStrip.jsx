@@ -1,22 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { GameClient } from '../api/client';
+import { useResearch } from '../hooks/useResearch';
 
 export default function ResearchStrip() {
-  const [research, setResearch] = useState({ active: null });
+  const { research } = useResearch();
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const res = await GameClient.getResearch();
-        if (mounted) setResearch(res || { active: null });
-      } catch (e) {
-        console.error('Failed to load research', e);
-      }
-    };
-    load();
-    const t = setInterval(load, 2000);
-    return () => { mounted = false; clearInterval(t); };
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
   }, []);
 
   if (!research || !research.active) {
@@ -28,8 +20,9 @@ export default function ResearchStrip() {
   }
 
   const active = research.active;
+  const currentLevel = (research.techLevels && research.techLevels[active.techId]) || 0;
   const now = Date.now();
-  const total = active.durationSeconds * 1000;
+  const total = (active.totalTicks || active.durationSeconds || active.totalTime || 1) * 1000;
   const elapsed = Math.min(now - active.startedAt, total);
   const pct = Math.floor((elapsed / total) * 100);
 
@@ -38,10 +31,10 @@ export default function ResearchStrip() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
         <div className="font-cinzel" style={{ color: '#e0cda0', fontSize: '1.1em' }}>
           <i className="fa-solid fa-flask" style={{ marginRight: '8px', color: '#aaffaa' }}></i>
-          {active.techId}
+          {active.techId} {currentLevel > 0 && <span style={{ color: 'var(--accent-gold)', fontSize: '0.8em' }}>(Lvl {currentLevel})</span>}
         </div>
         <div className="font-garamond" style={{ color: '#ccc', fontSize: '1.1em' }}>
-          {Math.max(0, Math.ceil((active.completesAt - now)/1000))}s remaining
+          {Math.max(0, Math.ceil((total - elapsed)/1000))}s remaining
         </div>
       </div>
       <div className="progress-bar-bg" style={{ height: '8px', background: '#222', border: '1px solid #444', borderRadius: '4px' }}>

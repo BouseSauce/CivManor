@@ -25,6 +25,21 @@ export default function EspionageModal({ isOpen, onClose, targetAreaId, targetNa
     }
   };
 
+  const handleRecall = async () => {
+    if (!targetAreaId) return;
+    try {
+      setLoading(true);
+      const resp = await GameClient.recallSpy(targetAreaId);
+      alert(resp?.message || 'Spy recalled');
+      setIntel(null);
+      onClose();
+    } catch (e) {
+      alert('Failed to recall spy: ' + (e?.message || JSON.stringify(e)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   const CensoredRow = ({ label, value, isCensored }) => (
@@ -82,7 +97,17 @@ export default function EspionageModal({ isOpen, onClose, targetAreaId, targetNa
             fontSize: '0.9rem'
           }}>{error}</div>}
           
-          {intel && (
+          {intel && intel.status === 'traveling' && (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <i className="fa-solid fa-horse-head fa-bounce" style={{ fontSize: '2.5rem', marginBottom: 15, display: 'block', color: 'var(--accent-gold)' }}></i>
+              <div className="font-cinzel" style={{ fontSize: '1.2rem', marginBottom: 10 }}>Spy Infiltrating...</div>
+              <div style={{ color: 'var(--text-muted)' }}>
+                Estimated arrival: {Math.floor(intel.ticksRemaining / 60)}m {intel.ticksRemaining % 60}s
+              </div>
+            </div>
+          )}
+
+          {intel && intel.status !== 'traveling' && (
             <div style={{ fontFamily: 'var(--font-body)' }}>
               <div className="font-cinzel" style={{ 
                 textAlign: 'center', 
@@ -94,9 +119,20 @@ export default function EspionageModal({ isOpen, onClose, targetAreaId, targetNa
                 paddingBottom: 8,
                 color: 'var(--text-highlight)'
               }}>
-                Intel Depth: {intel.depth}
+                Intel Depth: {intel.intelDepth || intel.depth}
               </div>
 
+              {intel.ticksRemaining !== undefined && (
+                <div style={{ textAlign: 'center', marginBottom: 15, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                  <i className="fa-solid fa-hourglass-half" style={{ marginRight: 8 }}></i>
+                  Spy active for: {Math.floor(intel.ticksRemaining / 60)}m {intel.ticksRemaining % 60}s
+                  {intel.detection && (
+                    <div style={{ marginTop: 8, fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                      Detection Risk: <strong style={{ color: 'var(--accent-red)' }}>{intel.detection.riskPercent}</strong>
+                    </div>
+                  )}
+                </div>
+              )}
               <div style={{ textAlign: 'center', marginBottom: 20 }}>
                 <span style={{ 
                   fontSize: '0.8rem', 
@@ -175,7 +211,7 @@ export default function EspionageModal({ isOpen, onClose, targetAreaId, targetNa
                     <CensoredRow label="Food" value={Math.floor(intel.resources?.Food || 0).toLocaleString()} isCensored={false} />
                     <CensoredRow label="Timber" value={Math.floor(intel.resources?.Timber || 0).toLocaleString()} isCensored={false} />
                     <CensoredRow label="Stone" value={Math.floor(intel.resources?.Stone || 0).toLocaleString()} isCensored={false} />
-                    <CensoredRow label="Gold" value={Math.floor(intel.resources?.Gold || 0).toLocaleString()} isCensored={false} />
+                    <CensoredRow label="Coal" value={Math.floor(intel.resources?.Coal || 0).toLocaleString()} isCensored={false} />
                   </section>
 
                   <section style={{ marginBottom: 30 }}>
@@ -228,6 +264,9 @@ export default function EspionageModal({ isOpen, onClose, targetAreaId, targetNa
         </div>
         
         <div className="panel-footer" style={{ padding: '15px', textAlign: 'right', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          {intel && intel.ticksRemaining > 0 && (
+            <button className="btn" onClick={handleRecall} style={{ marginRight: 8, minWidth: '120px', background: 'var(--accent-red)', color: '#111' }}>Recall Spy</button>
+          )}
           <button className="btn" onClick={onClose} style={{ minWidth: '100px' }}>Close</button>
         </div>
       </div>

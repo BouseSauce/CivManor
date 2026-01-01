@@ -5,8 +5,7 @@ export const PRODUCTION_RATES = {
   stonePitPerWorkerPerSecond: 0.12, // doubled
   breadPerLevelPerSecond: 0.18,
   foodPerWorkerPerSecond: 0.075,
-  townHallFoodPerWorkerPerSecond: 0.035,
-  hidesPerWorkerPerSecond: 0.03
+  townHallFoodPerWorkerPerSecond: 0.035
 };
 
 // Processing (T2) rates

@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3001/api';
 
 let _token = null;
 
@@ -100,6 +100,15 @@ export const GameClient = {
         return json;
     },
 
+    async getConfig() {
+        const response = await publicFetch('/config', { method: 'GET' });
+        const text = await response.text();
+        let json = null;
+        try { json = text ? JSON.parse(text) : null; } catch (e) { /* ignore */ }
+        if (!response.ok) throw json || { message: response.statusText };
+        return json;
+    },
+
     async getArea(areaId) {
         const resp = await this.authFetch(`/area/${areaId}`, { method: 'GET' });
         try {
@@ -159,6 +168,10 @@ export const GameClient = {
         return await this.authFetch('/espionage/spy', { method: 'POST', body: JSON.stringify({ targetAreaId, originAreaId }) });
     },
 
+    async recallSpy(targetAreaId) {
+        return await this.authFetch('/espionage/recall', { method: 'POST', body: JSON.stringify({ targetAreaId }) });
+    },
+
     async markNotificationRead(notificationId) {
         return await this.authFetch('/notifications/mark-read', { method: 'POST', body: JSON.stringify({ notificationId }) });
     },
@@ -213,7 +226,8 @@ export const GameClient = {
     },
 
     async recruitUnits(areaId, unitType, count) {
-        return await this.authFetch(`/area/${areaId}/recruit`, { method: 'POST', body: JSON.stringify({ unitType, count }) });
+        // Server expects `unitId` in the payload. Map the caller's `unitType` to `unitId`.
+        return await this.authFetch(`/area/${areaId}/recruit`, { method: 'POST', body: JSON.stringify({ unitId: unitType, count }) });
     },
 
     async cancelUpgrade(areaId, itemId, itemType = 'Building') {
@@ -246,6 +260,11 @@ export const GameClient = {
     async adminCompleteBuildings(areaId) {
         const body = areaId ? { areaId } : {};
         return await this.adminFetch('/admin/complete-buildings', { method: 'POST', body: JSON.stringify(body) });
+    },
+
+    async adminCompleteResearch(userId) {
+        const body = userId ? { userId } : {};
+        return await this.adminFetch('/admin/complete-research', { method: 'POST', body: JSON.stringify(body) });
     },
 
     async adminGrant(payload) {

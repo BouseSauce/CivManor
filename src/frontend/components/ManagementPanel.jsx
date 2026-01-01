@@ -11,7 +11,7 @@ const MILITARY_BUILDINGS = ['Barracks', 'Stable', 'SiegeWorkshop', 'Wall', 'Towe
 /**
  * ManagementPanel - Displays a grid of buildings
  */
-const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssign, filter = 'all', openResearchModal }) => {
+const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssign, filter = 'all', openResearchModal, readOnly = false }) => {
     const [selected, setSelected] = useState(null);
 
     const getTownHallReq = (b) => {
@@ -173,7 +173,7 @@ const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssi
         const name = (b.name || '').toLowerCase();
         const cat = (b.category || '').toString().toLowerCase();
         if (cat.includes('military') || ['barracks','stable','archeryrange','wall','tower','siegeworshop','siegeworskshop'].some(x=>id.toLowerCase().includes(x) || name.includes(x))) return 'Stronghold';
-        if (['mine','quarry','surfacemine','goldshaft','sawpit'].some(x=>id.toLowerCase().includes(x) || name.includes(x))) return 'Extraction';
+        if (['mine','quarry','surfacemine','sawpit'].some(x=>id.toLowerCase().includes(x) || name.includes(x))) return 'Extraction';
         if (['bloomery','sawpit','sawmill','steelworks','saw'].some(x=>id.toLowerCase().includes(x) || name.includes(x))) return 'Industry';
         // Township is default for homes, townhall, storehouse
         return 'Township';
@@ -279,6 +279,7 @@ const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssi
                                         onAssign={(...args) => { onAssign && onAssign(...args); }}
                                         onUpgrade={(id) => { onUpgrade && onUpgrade(id); }}
                                         area={area}
+                                        readOnly={readOnly}
                                     />
                                 );
                             }
@@ -293,6 +294,7 @@ const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssi
                                     openResearchModal={openResearchModal}
                                     hasResearch={!!RESEARCH_DEFS[b.id]}
                                     area={area}
+                                    readOnly={readOnly}
                                 />
                             );
                         })}
@@ -307,6 +309,7 @@ const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssi
                 onUpgrade={(id) => { onUpgrade && onUpgrade(id); handleClose(); }} 
                 onAssignVillagers={(id, count) => { return onAssign ? onAssign(id, count) : Promise.resolve(); }}
                 openResearchModal={openResearchModal}
+                readOnly={readOnly}
             />
         </div>
     );

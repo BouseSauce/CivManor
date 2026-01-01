@@ -1,5 +1,0 @@
-// Deprecated backup file: TechTree.jsx.bak.1765960130354
-// This backup referenced the legacy BUILDING_PREREQS export and has been
-// neutralized to avoid accidental imports. Use `TechTree.jsx` instead.
-import React from 'react';
-export default function DeprecatedTechTreeBackup() { return null; }

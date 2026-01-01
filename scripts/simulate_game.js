@@ -115,20 +115,22 @@ async function runSimulation() {
         // Level 1 Essentials (Build them first)
         { id: 'LoggingCamp', goal: 1 },
         { id: 'StonePit', goal: 1 },
+        { id: 'Farmhouse', goal: 1 },
         { id: 'Storehouse', goal: 1 },
         
         // Level 5 Production (Baseline)
         { id: 'LoggingCamp', goal: 5 },
         { id: 'StonePit', goal: 5 },
+        { id: 'Farmhouse', goal: 5 },
         
         // Early Town Hall & Housing
         { id: 'TownHall', goal: 5 },
-        { id: 'Tenements', goal: 5 },
         { id: 'Storehouse', goal: 5 },
         
         // Mid-tier Production
         { id: 'LoggingCamp', goal: 10 },
         { id: 'StonePit', goal: 10 },
+        { id: 'Farmhouse', goal: 10 },
         
         // Core progression
         { id: 'TownHall', goal: GOALS.TownHall },
@@ -136,10 +138,10 @@ async function runSimulation() {
         // Secondary Production
         { id: 'LoggingCamp', goal: GOALS.Gathering },
         { id: 'StonePit', goal: GOALS.Gathering },
+        { id: 'Farmhouse', goal: GOALS.Gathering },
         
         // Infrastructure
         { id: 'Storehouse', goal: 10 },
-        { id: 'Tenements', goal: 10 },
         
         // Industry
         { id: 'Sawpit', goal: 10 },
@@ -155,8 +157,6 @@ async function runSimulation() {
     ];
 
     const RESEARCH_PRIORITY = [
-        'Mineral Storage',
-        'Gold Storage',
         'Basic Sanitation',
         'Hardwood Framing',
         'Fertility Festivals',
@@ -190,12 +190,11 @@ async function runSimulation() {
                 Food: Math.floor(resources.Food || 0),
                 Planks: Math.floor(resources.Planks || 0),
                 IronIngot: Math.floor(resources.IronIngot || 0),
-                Gold: Math.floor(resources.Gold || 0),
                 Knowledge: Math.floor(resources.Knowledge || 0)
             };
 
             console.log(`\n--- [${new Date().toLocaleTimeString()}] TH:${thLvl} | Pop:${currentPop}/${maxPop} | Militia:${militiaCount} | Queue:${queue.length} ---`);
-            console.log(`Resources: T:${res.Timber} S:${res.Stone} F:${res.Food} P:${res.Planks} I:${res.IronIngot} K:${res.Knowledge} G:${res.Gold}`);
+            console.log(`Resources: T:${res.Timber} S:${res.Stone} F:${res.Food} P:${res.Planks} I:${res.IronIngot} K:${res.Knowledge}`);
             
             const builtBuildings = buildings.filter(b => b.level > 0);
             console.log(`Buildings: ${builtBuildings.map(b => `${b.id}:L${b.level}`).join(', ')}`);
@@ -231,7 +230,7 @@ async function runSimulation() {
             }
 
             // 1. Worker Assignment
-            let assignOrder = ['LoggingCamp', 'StonePit', 'TownHall', 'Farm', 'Sawpit', 'Bloomery', 'Library', 'Smithy'];
+            let assignOrder = ['LoggingCamp', 'StonePit', 'Farmhouse', 'Farm', 'Sawpit', 'Bloomery', 'Library', 'Smithy', 'TownHall'];
             
             // DYNAMIC ASSIGNMENT:
             // If we are missing a specific resource for our priority, move that building to the front of the assignOrder.
@@ -258,13 +257,13 @@ async function runSimulation() {
                 }
 
                 // Priority 2: Food (Only if low or specifically needed)
-                // If food is very high (> 5000), deprioritize TownHall/Farm to the end
+                // If food is very high (> 5000), deprioritize Farmhouse to the end
                 if (res.Food > 5000) {
-                    assignOrder = [...assignOrder.filter(id => id !== 'TownHall' && id !== 'Farm'), 'TownHall', 'Farm'];
-                    reasoning += "Food is abundant (>5000), deprioritizing TownHall. ";
+                    assignOrder = [...assignOrder.filter(id => id !== 'Farmhouse' && id !== 'Farm'), 'Farmhouse', 'Farm'];
+                    reasoning += "Food is abundant (>5000), deprioritizing Farmhouse. ";
                 } else if (res.Food < 500 || missingResources.includes('Food')) {
-                    assignOrder = ['TownHall', 'Farm', ...assignOrder.filter(id => id !== 'TownHall' && id !== 'Farm')];
-                    reasoning += "Food is low or needed, boosting TownHall. ";
+                    assignOrder = ['Farmhouse', 'Farm', ...assignOrder.filter(id => id !== 'Farmhouse' && id !== 'Farm')];
+                    reasoning += "Food is low or needed, boosting Farmhouse. ";
                 }
 
                 // Priority 3: Industry (If we have raw materials but need refined)
@@ -286,9 +285,10 @@ async function runSimulation() {
                 if (currentIdle <= 0) break;
                 const b = buildings.find(x => x.id === bId);
                 if (!b || b.level === 0) continue;
+                if (bId === 'TownHall') continue; 
 
-                // If food is abundant, don't even give the minimum to TownHall yet
-                if (res.Food > 5000 && (bId === 'TownHall' || bId === 'Farm')) continue;
+                // If food is abundant, don't even give the minimum to Farmhouse yet
+                if (res.Food > 5000 && (bId === 'Farmhouse' || bId === 'Farm')) continue;
 
                 newAssignments[bId] = 1;
                 currentIdle--;
@@ -304,9 +304,9 @@ async function runSimulation() {
                 const current = newAssignments[bId] || 0;
                 const space = cap - current;
                 
-                // If food is abundant, cap TownHall at 1 worker max unless it's the only thing left
+                // If food is abundant, cap Farmhouse at 1 worker max unless it's the only thing left
                 let effectiveSpace = space;
-                if (res.Food > 5000 && (bId === 'TownHall' || bId === 'Farm')) {
+                if (res.Food > 5000 && (bId === 'Farmhouse' || bId === 'Farm')) {
                     effectiveSpace = Math.max(0, 1 - current);
                 }
 
@@ -519,7 +519,7 @@ async function runSimulation() {
                     const watchtower = buildings.find(b => b.id === 'Watchtower');
                     if (watchtower && watchtower.level >= 20) {
                         const count = 2;
-                        if (res.Gold > 200 && res.Food > 100) {
+                        if (res.Knowledge > 200 && res.Food > 100) {
                             console.log(`[ACTION] Recruiting ${count} Spies...`);
                             await api(`/area/${areaId}/recruit`, 'POST', { unitId: 'Spy', count });
                             reasoning += `Recruiting ${count} Spies. `;

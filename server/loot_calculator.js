@@ -18,9 +18,7 @@ function saveJson(p, obj) { fs.writeFileSync(p, JSON.stringify(obj, null, 2), 'u
 const DEFAULT_DEFENDER_HOLDINGS = {
   Timber: 10000,
   Stone: 10000,
-  Ore: 10000,
-  IronIngot: 10000,
-  Gold: 10000
+  IronIngot: 10000
 };
 
 // Main

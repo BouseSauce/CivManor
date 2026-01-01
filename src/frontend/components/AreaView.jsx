@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AreaOverviewPanel from './AreaOverviewPanel';
 import QueuePanel from './QueuePanel';
 import ManagementPanel from './ManagementPanel';
@@ -10,12 +10,14 @@ import TechTree from './TechTree';
 import { BUILDING_CONFIG } from '../../core/config/buildings.js';
 import { GameClient } from '../api/client';
 import { GAME_CONFIG } from '../../core/config/gameConfig.js';
+import { useResearch } from '../hooks/useResearch';
 
 export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parentRefresh }) {
   const [tab, setTab] = useState('buildings'); // buildings, military, research
   const [localTick, setLocalTick] = useState(0); // bump to force re-render after optimistic changes
   const [localArea, setLocalArea] = useState(area || null);
   const [lastActionAt, setLastActionAt] = useState(0);
+  const { research } = useResearch();
 
   const refreshArea = async () => {
     if (typeof parentRefresh === 'function') return parentRefresh();
@@ -23,9 +25,9 @@ export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parent
   };
 
   const handleAssign = (buildingId, count) => {
-    if (!localArea || !localArea.id) return Promise.resolve();
+    if (!localArea || !localArea.id || !buildingId) return Promise.resolve();
     setLastActionAt(Date.now());
-    if (typeof count === 'number') {
+    if (typeof count === 'number' && Number.isFinite(count)) {
       return import('../api/client').then(m => m.GameClient.assignWorkers(localArea.id, buildingId, count).then((resp) => { 
         try { window.dispatchEvent(new CustomEvent('area:refresh-request', { detail: { areaId: localArea.id } })); } catch (e) {}
         if (parentRefresh) parentRefresh(); else {
@@ -107,19 +109,65 @@ export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parent
 
         // Update local area so child components receive fresh props
         setLocalArea(updated);
+        try {
+          window.__lastFetchedArea = window.__lastFetchedArea || {};
+          window.__lastFetchedArea[updated.id] = updated;
+        } catch (e) {}
         try { window.dispatchEvent(new CustomEvent('area:updated', { detail: { areaId: updated.id, resources: updated.resources, assignments: updated.assignments, autoAssign: updated.autoAssign || {}, idleReasons: updated.idleReasons || {}, units: updated.units } })); } catch (e) {}
       } catch (e) { /* ignore */ }
     }, tickMs);
     return () => { mounted = false; clearInterval(id); };
   }, [localArea && localArea.id, lastActionAt]);
 
-  const filteredQueue = (localArea?.queue || []).filter(item => {
-    if (tab === 'buildings') return item.type === 'Building';
-    if (tab === 'military') return item.type === 'Unit';
-    return false; // Hide for research tab
-  });
+  const filteredQueue = useMemo(() => {
+    const baseQueue = [...(localArea?.queue || [])];
+    
+    // Add active research if it exists
+    if (research?.active) {
+      const active = research.active;
+      const now = Date.now();
+      const total = (active.totalTicks || active.durationSeconds || active.totalTime || 1) * 1000;
+      const elapsed = Math.min(now - active.startedAt, total);
+      const remaining = Math.max(0, Math.ceil((total - elapsed) / 1000));
+      const pct = Math.floor((elapsed / total) * 100);
 
-  const queueTitle = tab === 'military' ? 'Recruitment Ledger' : 'Construction Ledger';
+      baseQueue.push({
+        type: 'Research',
+        id: active.techId,
+        name: active.techId,
+        secondsRemaining: remaining,
+        totalSeconds: total / 1000,
+        progress: pct,
+        ticksRemaining: remaining // QueuePanel supports this
+      });
+    }
+
+    return baseQueue.filter(item => {
+      if (tab === 'buildings') return item.type === 'Building' || item.type === 'Research';
+      if (tab === 'military') return item.type === 'Unit';
+      if (tab === 'research') return item.type === 'Research';
+      return false;
+    });
+  }, [localArea?.queue, research?.active, tab]);
+
+  const queueTitle = tab === 'military' ? 'Recruitment Ledger' : (tab === 'research' ? 'Research Progress' : 'Construction & Research Ledger');
+
+  if (!localArea.owned && !localArea.spyIntel) {
+    return (
+      <div className="area-view" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', padding: 40, textAlign: 'center', background: 'var(--wood-dark)' }}>
+        <h2 className="font-cinzel" style={{ color: 'var(--accent-gold)', fontSize: '2.5rem' }}>Territory of {localArea.ownerName || 'Unknown'}</h2>
+        <div className="beveled-panel" style={{ margin: '40px auto', maxWidth: 600, padding: 40, background: 'rgba(0,0,0,0.4)' }}>
+          <i className="fa-solid fa-eye-slash" style={{ fontSize: '4rem', color: 'var(--text-muted)', marginBottom: 20 }}></i>
+          <p style={{ color: 'var(--text-main)', fontSize: '1.2rem', lineHeight: '1.6' }}>
+            This area is owned by another player. You do not have an active spy in this territory to gather intelligence.
+          </p>
+          <p style={{ color: 'var(--text-muted)', marginTop: 20 }}>
+            Send a spy from the World Map to reveal resources, buildings, and unit counts.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="area-view" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -147,7 +195,13 @@ export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parent
         borderBottom: '2px solid var(--wood-dark)',
         background: 'rgba(0,0,0,0.1)'
       }}>
-        {['buildings', 'military', 'research'].map(t => (
+        {['buildings', 'military', 'research'].filter(t => {
+          if (localArea.owned) return true;
+          if (t === 'buildings') return localArea.intelDepth === 'STANDARD' || localArea.intelDepth === 'FULL';
+          if (t === 'military') return localArea.intelDepth === 'FULL';
+          if (t === 'research') return false;
+          return false;
+        }).map(t => (
           <button 
             key={t}
             onClick={() => setTab(t)}
@@ -210,6 +264,7 @@ export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parent
                 onUpgrade={onUpgrade} 
                 onAssign={handleAssign}
                 filter="all"
+                readOnly={!localArea.owned}
               />
 
                 {/* Use ManagementPanel category tabs to show Extraction / Industry / Township views.
@@ -226,12 +281,13 @@ export default function AreaView({ area, onUpgrade, onRecruit, onRefresh: parent
               queue={localArea?.queue || []}
               onRecruit={onRecruit}
               onUpgrade={onUpgrade}
+              readOnly={!localArea.owned}
             />
           )}
 
           {tab === 'research' && (
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-              <div style={{ flex: 1 }}><TechTree /></div>
+              <div style={{ flex: 1 }}><TechTree area={localArea} /></div>
               <div style={{ width: 360 }}><ResearchStrip area={localArea} /></div>
             </div>
           )}

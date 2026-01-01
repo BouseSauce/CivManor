@@ -14,6 +14,7 @@ import AdminPanel from './AdminPanel';
 import ResearchModal from './ResearchModal';
 import GlobalResearchWidget from './GlobalResearchWidget';
 import { BUILDING_CONFIG } from '../../core/config/buildings.js';
+import { calculateStorageCapacity } from '../../core/logic/scaling.js';
 import '../styles/hexgrid.css'; // Import Hex Grid Styles
 
 export default function Dashboard({ user, onLogout, onUserUpdate }) {
@@ -27,6 +28,7 @@ export default function Dashboard({ user, onLogout, onUserUpdate }) {
   const [showLogistics, setShowLogistics] = useState(false); // Logistics Modal State
   const [isResearchModalOpen, setIsResearchModalOpen] = useState(false);
   const [researchModalTab, setResearchModalTab] = useState('TownHall');
+  const [messageRecipient, setMessageRecipient] = useState(null);
 
   const openResearchModal = (tab = 'TownHall') => {
     setResearchModalTab(tab);
@@ -69,7 +71,7 @@ export default function Dashboard({ user, onLogout, onUserUpdate }) {
       const owned = [];
       regions.forEach(r => r.areas.forEach(a => { if (a.ownerId === user.id) owned.push(a.id); }));
       if (owned.length === 0) {
-        setEmpireSummary({ population: 0, food: 0, stone: 0, carts: (user.inventory?.units?.TradeCart || 0) });
+        setEmpireSummary({ population: 0, food: 0, stone: 0, carts: (user.inventory?.units?.SupplyCart || user.inventory?.units?.SupplyWagon || 0) });
         return;
       }
       try {
@@ -83,11 +85,11 @@ export default function Dashboard({ user, onLogout, onUserUpdate }) {
           totalFood += (res.Food || 0) + (res.Fish || 0) + (res.Bread || 0);
           totalStone += (res.Stone || 0);
         });
-        const carts = (user.inventory?.units?.TradeCart || 0);
+        const carts = (user.inventory?.units?.SupplyCart || user.inventory?.units?.SupplyWagon || 0);
         if (!cancelled) setEmpireSummary({ population: totalPop, food: totalFood, stone: totalStone, carts });
       } catch (e) {
         console.error('Failed to compute empire summary', e);
-        if (!cancelled) setEmpireSummary({ population: 0, food: 0, stone: 0, carts: (user.inventory?.units?.TradeCart || 0) });
+        if (!cancelled) setEmpireSummary({ population: 0, food: 0, stone: 0, carts: (user.inventory?.units?.SupplyCart || user.inventory?.units?.SupplyWagon || 0) });
       }
     })();
     return () => { cancelled = true; };
@@ -101,9 +103,9 @@ export default function Dashboard({ user, onLogout, onUserUpdate }) {
         setSelectedArea(areaId);
         setView('area');
       } else {
-        const hasCart = (user && user.inventory && user.inventory.units && (user.inventory.units.TradeCart || 0)) > 0;
+        const hasCart = (user && user.inventory && user.inventory.units && ((user.inventory.units.SupplyCart || 0) + (user.inventory.units.SupplyWagon || 0)) > 0);
         if (!hasCart) {
-          alert('Area is unowned and you do not have a TradeCart to claim it.');
+          alert('Area is unowned and you do not have a Supply Cart to claim it.');
           return;
         }
         const name = window.prompt('Name this area as you claim it (optional):', '');
@@ -224,12 +226,11 @@ export default function Dashboard({ user, onLogout, onUserUpdate }) {
     const capacities = {};
     if (!area) return capacities;
     try {
-      const storeCfg = BUILDING_CONFIG['Storehouse'];
       const storeLevel = (area.buildings || []).find(b => b.id === 'Storehouse')?.level || 0;
+      const storeCfg = BUILDING_CONFIG['Storehouse'];
       if (storeCfg && storeCfg.storageBase) {
-        const mul = storeCfg.storageMultiplier || 1.0;
-        Object.entries(storeCfg.storageBase).forEach(([res, base]) => {
-          capacities[`${res}Cap`] = Math.floor(base * Math.pow(mul, storeLevel));
+        Object.keys(storeCfg.storageBase).forEach(res => {
+          capacities[`${res}Cap`] = calculateStorageCapacity(res, storeLevel);
         });
       }
     } catch (e) {}
@@ -242,7 +243,23 @@ export default function Dashboard({ user, onLogout, onUserUpdate }) {
       {/* CityView has its own header */}
 
       {view === 'world' ? (
-        <WorldBrowser regions={regions} onViewArea={viewArea} onClaim={claimArea} user={user} selectedAreaId={selectedArea} initialCenterId={mapInitialCenterId} />
+        <WorldBrowser 
+          regions={regions} 
+          onViewArea={viewArea} 
+          onClaim={claimArea} 
+          user={user} 
+          selectedAreaId={selectedArea} 
+          initialCenterId={mapInitialCenterId}
+          onSendMessage={(area) => {
+            // If area has an owner, open messages and prefill recipient
+            if (area && area.ownerId) {
+              setMessageRecipient(area.ownerId);
+            } else {
+              setMessageRecipient(null);
+            }
+            setView('messages');
+          }}
+        />
       ) : view === 'area' && areaData ? (
         <AreaView 
           area={areaData} 
@@ -275,11 +292,11 @@ export default function Dashboard({ user, onLogout, onUserUpdate }) {
           </div>
         )}
         {view === 'research' && (
-          <TechTree />
+          <TechTree area={areaData || (regions.flatMap(r => r.areas || []).find(a => a.ownerId === user?.id) || null)} />
         )}
 
         {view === 'messages' && (
-          <InboxPanel />
+          <InboxPanel initialRecipient={messageRecipient} />
         )}
         {view === 'notifications' && (
           <GreatArchives />

@@ -54,13 +54,12 @@ function getCombatMultiplier(attackerClass, defenderClass, attackerUnitId) {
 /**
  * Calculates salvage for a stack of killed units.
  */
-function calculateSalvage(unitId, count, scavengingLevel) {
+function calculateSalvage(unitId, count) {
     const unitDef = UNIT_CONFIG[unitId];
     if (!unitDef || !unitDef.cost) return {};
 
     const baseRate = 0.30;
-    const bonusRate = scavengingLevel * 0.05;
-    const totalRate = baseRate + bonusRate;
+    const totalRate = baseRate;
 
     const salvage = {};
     for (const [res, amt] of Object.entries(unitDef.cost)) {
@@ -178,8 +177,7 @@ export function simulateBattle(opts = {}) {
 
                 if (lostCount > 0) {
                     losses[u.id] = lostCount;
-                    const scavengingLevel = research['Scavenging'] || 0;
-                    const unitSalvage = calculateSalvage(u.id, lostCount, scavengingLevel);
+                    const unitSalvage = calculateSalvage(u.id, lostCount);
                     for (const [res, amt] of Object.entries(unitSalvage)) {
                         salvagePool[res] = (salvagePool[res] || 0) + amt;
                     }

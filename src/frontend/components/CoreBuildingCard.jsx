@@ -1,14 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BUILDING_CONFIG, computeTotalLevelCost } from '../../core/config/buildings.js';
-import { UNIT_CONFIG } from '../../core/config/units.js';
-import { GameClient } from '../api/client.js';
 import { calculateBuildTime } from '../../core/logic/scaling.js';
-import { getColorForIconClass } from '../constants/iconMaps';
+import { getColorForIconClass, getIconForResource } from '../constants/iconMaps';
 
-export default function CoreBuildingCard({ b, onOpen, onAssign, onUpgrade, area }) {
+export default function CoreBuildingCard({ b, onOpen, onAssign, onUpgrade, area, readOnly = false }) {
     const [isHovered, setIsHovered] = useState(false);
-    const [scholarCount, setScholarCount] = useState(0);
-    const [isRecruiting, setIsRecruiting] = useState(false);
 
     // --- 1. Name Evolution Logic ---
     const config = BUILDING_CONFIG[b.id] || {};
@@ -44,37 +40,18 @@ export default function CoreBuildingCard({ b, onOpen, onAssign, onUpgrade, area 
     const maxWorkers = (config.workforceCap || 0) * level;
     const currentFoodProd = assignedCount > 0 ? Math.floor(foodProd * (0.5 + (assignedCount * 0.5))) : 0;
 
-    // --- 4. Scholar Logic ---
-    // Fetch scholar count from area units
-    useEffect(() => {
-        if (area && area.units) {
-            const s = area.units.find(u => u.type === 'Scholar');
-            setScholarCount(s ? s.count : 0);
-        }
-    }, [area]);
-
-    const scholarConfig = UNIT_CONFIG['Scholar'];
-    const canRecruitScholar = area && scholarConfig && 
-        (area.resources.Food >= scholarConfig.cost.Food) &&
-        ((area.population?.current || 0) < (area.population?.max || 0)); 
-    // Actually unit config says populationCost: 1. So it takes space.
-    // "Recruiting a Scholar consumes 1 Idle Villager" -> This implies conversion.
-    // GameClient.recruit usually just adds unit and subtracts resources.
-    // If it consumes a villager, that logic must be in backend or we simulate it.
-    // For now, we'll assume standard recruit behavior unless specified otherwise.
-    const handleRecruit = async () => {
-        if (!canRecruitScholar || isRecruiting) return;
-        setIsRecruiting(true);
+    const producesRaw = (() => {
         try {
-            await GameClient.recruit(area.id, 'Scholar', 1);
-            // Trigger refresh
-            window.dispatchEvent(new CustomEvent('area:refresh-request', { detail: { areaId: area.id } }));
-        } catch (e) {
-            alert(e.message);
-        } finally {
-            setIsRecruiting(false);
-        }
-    };
+            const bo = config.baseOutput || {};
+            const tags = (config.tags || []).map(t => (t || '').toString().toLowerCase());
+            if (tags.includes('espionage') || tags.includes('intel')) return false;
+            if (Object.keys(bo).some(k => typeof bo[k] === 'number')) return true;
+            const relevant = ['processing', 'extraction', 'industry', 'gathering'];
+            if (tags.some(t => relevant.includes(t))) return true;
+            if ((b.id || '') === 'Watchtower') return false;
+            return false;
+        } catch (e) { return false; }
+    })();
 
     // --- Upgrade Logic ---
     const nextLevelCost = computeTotalLevelCost(b.id, level + 1) || {};
@@ -116,6 +93,7 @@ export default function CoreBuildingCard({ b, onOpen, onAssign, onUpgrade, area 
             </div>
 
             {/* Gathering Panel */}
+            {producesRaw && (
             <div className="beveled-panel" style={{ padding: '8px', borderRadius: 6, marginBottom: 12, background: 'rgba(255,255,255,0.05)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-main)' }}>
@@ -136,33 +114,7 @@ export default function CoreBuildingCard({ b, onOpen, onAssign, onUpgrade, area 
                     >+</button>
                 </div>
             </div>
-
-            {/* Scholar Panel */}
-            <div className="beveled-panel" style={{ padding: '8px', borderRadius: 6, marginBottom: 12, flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                        <i className="fas fa-graduation-cap" style={{ marginRight: 8, color: 'var(--accent-gold)' }}></i> Library Wing
-                    </span>
-                    <span className="badge badge-level" style={{ fontSize: '0.75rem' }}>{scholarCount} Scholars</span>
-                </div>
-
-                {/* Assignment Toggle (Mock UI for now as backend support for specific assignment might vary) */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 8 }}>
-                    <span>Output: +{scholarCount * 2} Knowledge</span>
-                    <span>Cost: -{scholarCount * 5} Food</span>
-                </div>
-
-                {/* Recruit Button */}
-                <button
-                    className={`btn font-cinzel ${canRecruitScholar ? 'btn-build glow-button' : ''}`}
-                    onClick={(e) => { e.stopPropagation(); handleRecruit(); }}
-                    disabled={!canRecruitScholar}
-                    style={{ width: '100%', minWidth: 120 }}
-                >
-                    {isRecruiting ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-plus" />}
-                    &nbsp;Recruit Scholar ({scholarConfig?.cost?.Food} Food)
-                </button>
-            </div>
+            )}
 
             {/* Upgrade Footer */}
             {b.isUpgrading ? (
@@ -173,24 +125,46 @@ export default function CoreBuildingCard({ b, onOpen, onAssign, onUpgrade, area 
                     </div>
                 </div>
             ) : (
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onUpgrade(b.id); }}
-                    disabled={!canAffordUpgrade}
-                    style={{
-                        marginTop: 'auto',
-                        width: '100%',
-                        padding: '8px',
-                        background: canAffordUpgrade ? 'linear-gradient(to bottom, #ffd700, #ffb300)' : '#3e2723',
-                        border: '1px solid #5c4033',
-                        borderRadius: '4px',
-                        color: canAffordUpgrade ? '#2d1b0d' : '#8d6e63',
-                        fontWeight: 'bold',
-                        cursor: canAffordUpgrade ? 'pointer' : 'not-allowed',
-                        opacity: canAffordUpgrade ? 1 : 0.7
-                    }}
-                >
-                    {canAffordUpgrade ? `Upgrade (${estTimeStr})` : 'Insufficient Res'}
-                </button>
+                !readOnly && (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onUpgrade(b.id); }}
+                        disabled={!canAffordUpgrade}
+                        style={{
+                            marginTop: 'auto',
+                            width: '100%',
+                            padding: '6px',
+                            background: canAffordUpgrade ? 'linear-gradient(to bottom, #4e342e, #3e2723)' : '#3e2723',
+                            border: canAffordUpgrade ? '1px solid #ffd700' : '1px solid #5c4033',
+                            borderRadius: '4px',
+                            color: canAffordUpgrade ? '#ffd700' : '#8d6e63',
+                            fontWeight: 'bold',
+                            cursor: canAffordUpgrade ? 'pointer' : 'not-allowed',
+                            opacity: canAffordUpgrade ? 1 : 0.9,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '2px',
+                            minHeight: '42px',
+                            boxShadow: canAffordUpgrade ? '0 0 10px rgba(255, 215, 0, 0.2)' : 'none'
+                        }}
+                    >
+                        <div style={{ fontSize: '0.85rem' }}>Upgrade ({estTimeStr})</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', fontSize: '0.75rem' }}>
+                            {Object.entries(nextLevelCost).map(([res, amt]) => {
+                                const iconDef = getIconForResource(res);
+                                const userHas = (area?.resources?.[res] || 0);
+                                const isMissing = userHas < amt;
+                                return (
+                                    <span key={res} style={{ display: 'flex', alignItems: 'center', gap: '3px', color: (!canAffordUpgrade && isMissing) ? '#ff5252' : 'inherit' }}>
+                                        <i className={`fa-solid ${iconDef.icon}`} style={{ fontSize: '0.7rem' }}></i>
+                                        <span>{amt.toLocaleString()}</span>
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    </button>
+                )
             )}
         </div>
     );

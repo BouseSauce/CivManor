@@ -30,6 +30,15 @@ export default function AdminPanel({ onRefresh }) {
     } catch (e) { setStatus('Error: ' + (e?.message || JSON.stringify(e))); }
   };
 
+  const handleCompleteResearch = async () => {
+    setStatus('Completing research...');
+    try {
+      const res = await GameClient.adminCompleteResearch(grantUserId || undefined);
+      setStatus('Complete research response: ' + JSON.stringify(res));
+      if (onRefresh) onRefresh();
+    } catch (e) { setStatus('Error: ' + (e?.message || JSON.stringify(e))); }
+  };
+
   const handleGrant = async () => {
     setStatus('Granting resources...');
     try {
@@ -64,7 +73,10 @@ export default function AdminPanel({ onRefresh }) {
 
         <div style={{ marginTop: 12 }}>
           <div style={{ fontWeight: 'bold', marginBottom: 6 }}>Actions</div>
-          <button className="btn" onClick={handleComplete}>Complete All Buildings (server)</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" onClick={handleComplete}>Complete All Buildings (server)</button>
+            <button className="btn" onClick={handleCompleteResearch}>Complete Active Research</button>
+          </div>
         </div>
 
         <div style={{ marginTop: 12 }}>

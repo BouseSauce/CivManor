@@ -66,19 +66,6 @@ export function calculateApproval(pop, capacity, foodVariety, taxRate, hasFirewo
 }
 
 /**
- * Calculates gold income per second from taxation.
- * Simple formula: Gold/sec = population * taxRate * (GOLD_PER_POP_PER_HOUR / 3600)
- * Tune `GOLD_PER_POP_PER_HOUR` to adjust yield.
- */
-export function calculateTaxIncome(pop, taxRate, townHallLevel = 0) {
-    const GOLD_PER_POP_PER_HOUR = 0.5; // baseline gold per pop per hour at 0 town hall
-    // Town Hall increases tax efficiency: +10% gold per TH level
-    const thMultiplier = 1 + (Math.max(0, townHallLevel) * 0.10);
-    const perSecond = (GOLD_PER_POP_PER_HOUR * thMultiplier) / 3600;
-    return (pop || 0) * (taxRate || 0) * perSecond;
-}
-
-/**
  * Processes population changes based on food and approval.
  * 
  * @param {number} pop - Current population
@@ -174,12 +161,12 @@ export function processPopulationTick(pop, foodStocks, approval, townHallLevel =
         let researchTimerMultiplier = 1.0;
         try {
             if (stateObj && stateObj.techLevels) {
-                const sanLvl = stateObj.techLevels['Sanitation Works'] || 0;
                 const basicSanLvl = stateObj.techLevels['Basic Sanitation'] || 0;
                 const medLvl = stateObj.techLevels['Medical Alchemy'] || 0;
                 const fertLvl = stateObj.techLevels['Fertility Festivals'] || 0;
+                const tenementLvl = stateObj.techLevels['Tenements'] || 0;
                 
-                const total = (sanLvl * 0.1) + (medLvl * 0.1) + (basicSanLvl * 0.02) + (fertLvl * 0.25);
+                const total = (medLvl * 0.1) + (basicSanLvl * 0.02) + (fertLvl * 0.25) + (tenementLvl * 0.15);
                 if (total > 0) researchTimerMultiplier = 1 + total;
             }
         } catch (e) { /* ignore */ }
@@ -205,7 +192,20 @@ export function processPopulationTick(pop, foodStocks, approval, townHallLevel =
         const growthInt = Math.floor(total);
         if (growthInt > 0) newPop += growthInt;
         const newRemainder = total - growthInt;
-        if (stateObj) stateObj._popGrowRemainder = newRemainder;
+        if (stateObj) {
+            stateObj._popGrowRemainder = newRemainder;
+            // Expose time to next pop for UI
+            // growthPerHour is pop/hour. Time for 1 pop = 1/growthPerHour hours = 3600/growthPerHour seconds.
+            // Remaining fraction to reach 1.0 is (1.0 - newRemainder).
+            // Time remaining = (1.0 - newRemainder) / (growth per second)
+            // growth per second = growthPerHour / 3600
+            // Time = (1.0 - newRemainder) / (growthPerHour / 3600) = (1.0 - newRemainder) * 3600 / growthPerHour
+            if (growthPerHour > 0) {
+                stateObj.nextPopSeconds = ((1.0 - newRemainder) * 3600) / growthPerHour;
+            } else {
+                stateObj.nextPopSeconds = null;
+            }
+        }
 
         // If approval is 0, apply a small emigration rate (1% per hour)
         if (approval <= 0) {

@@ -6,242 +6,171 @@ import { ResourceEnum } from '../constants/enums.js';
  * 'Infinite' techs scale in cost and benefit per level.
  */
 export const RESEARCH_DEFS = {
-    // --- TOWN HALL RESEARCH ---
+    // --- PILLAR 1: VITALITY (Growth & Governance) ---
     TownHall: {
         'Basic Sanitation': {
             id: 'Basic Sanitation',
             name: 'Basic Sanitation',
-            description: '+2% Pop Growth Speed per level.',
+            description: '+2% Pop Growth Speed per level. Lvl 3: Unlocks "Refugee Discovery".',
             baseCost: { [ResourceEnum.Food]: 500, [ResourceEnum.Stone]: 200 },
             growthFactor: 1.7,
-            requirement: { building: 'TownHall', level: 3 },
-            type: 'Infinite'
+            requirement: { building: 'TownHall', level: 1 },
+            type: 'Infinite',
+            maxLevel: 10
         },
-        'Hardwood Framing': {
-            id: 'Hardwood Framing',
-            name: 'Hardwood Framing',
-            description: '+5% Housing Capacity per level.',
-            baseCost: { [ResourceEnum.Timber]: 800, [ResourceEnum.Planks]: 400 },
+        'Literacy': {
+            id: 'Literacy',
+            name: 'Literacy',
+            description: 'Unlocks Scholars & Knowledge Pool.',
+            baseCost: { [ResourceEnum.Food]: 1000, [ResourceEnum.Knowledge]: 100 },
+            durationSeconds: 60,
+            requirement: { tech: 'Basic Sanitation', level: 5 },
+            type: 'One-Off'
+        },
+        'Bureaucracy': {
+            id: 'Bureaucracy',
+            name: 'Bureaucracy',
+            description: 'Lvl 5: Unlocks Taxation (Gold from Pop).',
+            baseCost: { [ResourceEnum.Food]: 1500, [ResourceEnum.Knowledge]: 200 },
             growthFactor: 1.8,
-            requirement: { building: 'TownHall', level: 5 },
-            type: 'Infinite'
-        },
-        'Drafting Tactics': {
-            id: 'Drafting Tactics',
-            name: 'Drafting Tactics',
-            description: '-5% Unit Training Time per level.',
-            baseCost: { [ResourceEnum.Food]: 1000, [ResourceEnum.Timber]: 500 },
-            growthFactor: 1.6,
-            requirement: { building: 'TownHall', level: 10 },
-            type: 'Infinite'
-        },
-        'Fertility Festivals': {
-            id: 'Fertility Festivals',
-            name: 'Fertility Festivals',
-            description: 'Significantly boosts population growth (+25% per level). 4 Tiers.',
-            baseCost: { [ResourceEnum.Food]: 1000, [ResourceEnum.Gold]: 100 },
-            growthFactor: 2.0,
-            requirement: { building: 'TownHall', level: 2 },
-            type: 'Infinite'
-        }
-    },
-
-    // --- STOREHOUSE RESEARCH ---
-    Storehouse: {
-        'Gold Storage': {
-            id: 'Gold Storage',
-            name: 'Gold Storage',
-            description: 'Allows storage of Gold in your Storehouse.',
-            baseCost: { [ResourceEnum.Gold]: 0, [ResourceEnum.Timber]: 50 },
-            durationSeconds: 60,
-            type: 'One-Off'
-        },
-        'Mineral Storage': {
-            id: 'Mineral Storage',
-            name: 'Mineral Storage',
-            description: 'Allows storage of mineral resources (Stone/Coal) in your Storehouse.',
-            baseCost: { [ResourceEnum.Gold]: 0, [ResourceEnum.Timber]: 60 },
-            durationSeconds: 75,
-            type: 'One-Off'
-        },
-        'Preservation': {
-            id: 'Preservation',
-            name: 'Preservation',
-            description: '-3% Army Food Upkeep per level.',
-            baseCost: { [ResourceEnum.Food]: 1000, [ResourceEnum.Stone]: 500 },
-            growthFactor: 1.6,
-            type: 'Infinite'
-        }
-    },
-
-    // --- BLOOMERY & SAWPIT RESEARCH ---
-    Bloomery: {
-        'Bellows Design': {
-            id: 'Bellows Design',
-            name: 'Bellows Design',
-            description: '-2% Smelting Fuel Cost per level.',
-            baseCost: { [ResourceEnum.Stone]: 400, [ResourceEnum.Timber]: 300 },
-            growthFactor: 1.6,
-            requirement: { building: 'Bloomery', level: 1 },
-            type: 'Infinite'
-        }
-    },
-    StonePit: {
-        'Deep Prospecting': {
-            id: 'Deep Prospecting',
-            name: 'Deep Prospecting',
-            description: 'Advanced mining techniques allow Stone Pits to refine ores from deeper deposits.',
-            baseCost: { [ResourceEnum.Stone]: 500 },
-            durationSeconds: 120,
-            requiredTownLevel: 5,
-            type: 'One-Off'
-        },
-        'Deep Prospecting_Infinite': {
-            id: 'Deep Prospecting_Infinite',
-            name: 'Efficiency Mining',
-            description: '+5% Mine Output per level.',
-            baseCost: { [ResourceEnum.Stone]: 1000, [ResourceEnum.Food]: 500 },
-            growthFactor: 1.6,
-            requirement: { building: 'StonePit', level: 10 },
-            type: 'Infinite'
-        }
-    },
-
-    Sawpit: {
-        'Wagon Reinforce': {
-            id: 'Wagon Reinforce',
-            name: 'Wagon Reinforce',
-            description: '+15% Transport Capacity per level.',
-            baseCost: { [ResourceEnum.Planks]: 1000, [ResourceEnum.IronIngot]: 500 },
-            growthFactor: 1.6,
-            requirement: { building: 'Sawpit', level: 5 },
-            type: 'Infinite'
-        }
-    },
-
-    // --- LIBRARY & UNIVERSITY (Advanced Studies) ---
-    Library: {
-        'Sanitation Works': {
-            id: 'Sanitation Works',
-            name: 'Sanitation Works',
-            description: 'Reduces population spawn timer. Each level reduces wait time by 10%.',
-            baseCost: { [ResourceEnum.Food]: 800, [ResourceEnum.Stone]: 300 },
-            growthFactor: 1.6,
-            requirement: { building: 'Library', level: 1 },
-            type: 'Infinite'
-        },
-        'Medical Alchemy': {
-            id: 'Medical Alchemy',
-            name: 'Medical Alchemy',
-            description: 'Improves medical knowledge; reduces population spawn timer and improves survival. Scholars accelerate this research.',
-            baseCost: { [ResourceEnum.Knowledge]: 200, [ResourceEnum.Food]: 1200 },
-            growthFactor: 1.7,
-            requirement: { building: 'Library', level: 2 },
-            type: 'Infinite'
-        },
-        'Open Borders Policy': {
-            id: 'Open Borders Policy',
-            name: 'Open Borders Policy',
-            description: 'Allows refugees to settle when nearby battle wrecks are salvaged. 20% chance per wreck to gain refugees.',
-            baseCost: { [ResourceEnum.Gold]: 300, [ResourceEnum.Knowledge]: 150 },
-            durationSeconds: 60,
-            requirement: { building: 'Library', level: 1 },
-            type: 'One-Off'
-        },
-        'Trading Hub': {
-            id: 'Trading Hub',
-            name: 'Trading Hub',
-            description: 'Enables wagons and trade hubs.',
-            baseCost: { [ResourceEnum.Gold]: 40, [ResourceEnum.Timber]: 60 },
-            durationSeconds: 40,
-            type: 'One-Off'
-        },
-        'Cartography': {
-            id: 'Cartography',
-            name: 'Cartography',
-            description: '+10% Movement Speed per level.',
-            baseCost: { [ResourceEnum.Food]: 600, [ResourceEnum.Timber]: 300 },
-            growthFactor: 1.5,
-            requirement: { building: 'Library', level: 1 },
-            type: 'Infinite'
-        },
-        'Barter Ledger': {
-            id: 'Barter Ledger',
-            name: 'Barter Ledger',
-            description: 'Unlocks P2P Market Hub.',
-            baseCost: { [ResourceEnum.Planks]: 5000, [ResourceEnum.IronIngot]: 2000 },
-            requirement: { building: 'Library', level: 5 },
-            type: 'One-Off'
-        },
-        'Scavenging': {
-            id: 'Scavenging',
-            name: 'Scavenging',
-            description: '+5% Battlefield Salvage per level.',
-            baseCost: { [ResourceEnum.Food]: 800, [ResourceEnum.Stone]: 400 },
-            growthFactor: 1.6,
-            requirement: { building: 'Library', level: 3 },
-            type: 'Infinite'
-        }
-    },
-    University: {
-        'Advanced Studies': {
-            id: 'Advanced Studies',
-            name: 'Advanced Studies',
-            description: 'Unlocks higher tier technology trees.',
-            baseCost: { [ResourceEnum.Gold]: 120 },
-            durationSeconds: 90,
-            type: 'One-Off'
-        },
-        'Mercenary Guards': {
-            id: 'Mercenary Guards',
-            name: 'Mercenary Guards',
-            description: '+5% Trade Cart Defense per level.',
-            baseCost: { [ResourceEnum.Gold]: 500, [ResourceEnum.Food]: 1000 },
-            growthFactor: 1.7,
-            requirement: { building: 'University', level: 1 },
-            type: 'Infinite'
+            requirement: { tech: 'Literacy', level: 1 },
+            type: 'Infinite',
+            maxLevel: 15
         },
         'Sovereign Command': {
             id: 'Sovereign Command',
             name: 'Sovereign Command',
             description: '+1 Active Army Slot per level.',
-            baseCost: { [ResourceEnum.Gold]: 2000, [ResourceEnum.Food]: 5000 },
-            growthFactor: 1.8,
-            requirement: { building: 'University', level: 5 },
+            baseCost: { [ResourceEnum.Food]: 5000, [ResourceEnum.Steel]: 500 },
+            growthFactor: 2.0,
+            requirement: { tech: 'Bureaucracy', level: 10 },
+            type: 'Infinite',
+            maxLevel: 5
+        },
+        'Tenements': {
+            id: 'Tenements',
+            name: 'Tenements',
+            description: 'Aggressive urban housing. +15% Pop Growth Speed per level.',
+            baseCost: { [ResourceEnum.Timber]: 2000, [ResourceEnum.Stone]: 1000, [ResourceEnum.Knowledge]: 500 },
+            growthFactor: 2.5,
+            requirement: { tech: 'Bureaucracy', level: 5 },
             type: 'Infinite'
         },
-        'Citadel Masonry': {
-            id: 'Citadel Masonry',
-            name: 'Citadel Masonry',
-            description: 'Unlocks permanent Citadel Upgrades.',
-            baseCost: { [ResourceEnum.Stone]: 20000, [ResourceEnum.Steel]: 5000 },
-            requirement: { building: 'University', level: 10 },
+        'Sovereignty': {
+            id: 'Sovereignty',
+            name: 'Sovereignty',
+            description: 'Unlocks the Claim Cart, allowing expansion into new territories.',
+            baseCost: { [ResourceEnum.Food]: 10000, [ResourceEnum.Steel]: 1000, [ResourceEnum.Knowledge]: 2000 },
+            durationSeconds: 3600,
+            requirement: { tech: 'Bureaucracy', level: 10, building: 'TownHall', level: 5 },
             type: 'One-Off'
         }
     },
 
-    // --- STABLE RESEARCH ---
-    Stable: {
-        'Selective Breeding': {
-            id: 'Selective Breeding',
-            name: 'Selective Breeding',
-            description: 'Reduces Breeding Time by 10%/lvl.',
-            baseCost: { [ResourceEnum.Food]: 5000, [ResourceEnum.Gold]: 1000 },
+    // --- PILLAR 2: STRUCTURE (Logistics & Industrial) ---
+    LoggingCamp: {
+        'Plank Refinement': {
+            id: 'Plank Refinement',
+            name: 'Plank Refinement',
+            description: 'Unlocks the Sawpit for refining Timber into Planks.',
+            baseCost: { [ResourceEnum.Timber]: 500, [ResourceEnum.Stone]: 200 },
+            durationSeconds: 60,
+            requirement: { building: 'LoggingCamp', level: 5 },
+            type: 'One-Off'
+        }
+    },
+    StonePit: {
+        'Metallurgy': {
+            id: 'Metallurgy',
+            name: 'Metallurgy',
+            description: 'Unlocks the Bloomery for refining Stone into Iron Ingots.',
+            baseCost: { [ResourceEnum.Stone]: 1000, [ResourceEnum.Timber]: 500 },
+            durationSeconds: 90,
+            requirement: { building: 'StonePit', level: 5 },
+            type: 'One-Off'
+        }
+    },
+    Sawpit: {
+        'The Wheel': {
+            id: 'The Wheel',
+            name: 'The Wheel',
+            description: 'Unlocks Cargo Wagon (Basic).',
+            baseCost: { [ResourceEnum.Timber]: 500, [ResourceEnum.Stone]: 200 },
+            durationSeconds: 45,
+            requirement: { building: 'Sawpit', level: 1 },
+            type: 'One-Off'
+        },
+        'Logistics': {
+            id: 'Logistics',
+            name: 'Logistics',
+            description: 'Lvl 8: Unlocks Large Cargo Wagon.',
+            baseCost: { [ResourceEnum.Planks]: 1000, [ResourceEnum.Food]: 500 },
             growthFactor: 1.6,
-            requirement: { building: 'Stable', level: 1 },
-            type: 'Infinite'
+            requirement: { tech: 'The Wheel', level: 1 },
+            type: 'Infinite',
+            maxLevel: 20
+        }
+    },
+    Library: {
+        'Chemistry': {
+            id: 'Chemistry',
+            name: 'Chemistry',
+            description: 'Lvl 4: Unlocks Charcoal Kilns.',
+            baseCost: { [ResourceEnum.Knowledge]: 300, [ResourceEnum.Food]: 1000 },
+            growthFactor: 1.7,
+            requirement: { tech: 'Literacy', level: 1 },
+            type: 'Infinite',
+            maxLevel: 12
         },
-        'Heavy Stirrups': {
-            id: 'Heavy Stirrups',
-            name: 'Heavy Stirrups',
-            description: 'Unlocks "Knight" heavy cavalry recruitment.',
-            baseCost: { [ResourceEnum.IronIngot]: 2000, [ResourceEnum.Planks]: 1000 },
-            requirement: { building: 'Stable', level: 5 },
-            type: 'One-Off'
+        'Architecture': {
+            id: 'Architecture',
+            name: 'Architecture',
+            description: 'Lvl 5: Unlocks Stone Walls (Fortification).',
+            baseCost: { [ResourceEnum.Stone]: 2000, [ResourceEnum.Knowledge]: 500 },
+            growthFactor: 1.8,
+            requirement: { tech: 'Chemistry', level: 2 },
+            type: 'Infinite',
+            maxLevel: 10
         }
     },
 
-    // (Barracks research removed — Barracks is handled via buildings/units)
+    // --- PILLAR 3: MIGHT (Defense & Espionage) ---
+    Bloomery: {
+        'Steel Refining': {
+            id: 'Steel Refining',
+            name: 'Steel Refining',
+            description: 'Lvl 5: Unlocks Blast Furnace.',
+            baseCost: { [ResourceEnum.IronIngot]: 1000, [ResourceEnum.Coal]: 500 },
+            growthFactor: 1.7,
+            requirement: { tech: 'Metallurgy', level: 1 },
+            type: 'Infinite',
+            maxLevel: 20
+        }
+    },
+    Watchtower: {
+        'Espionage': {
+            id: 'Espionage',
+            name: 'Espionage',
+            description: 'Lvl 4: See Unit Types in alerts.',
+            baseCost: { [ResourceEnum.Knowledge]: 500, [ResourceEnum.Food]: 2000 },
+            growthFactor: 1.7,
+            requirement: { tech: 'Literacy', level: 1 },
+            type: 'Infinite',
+            maxLevel: 15
+        }
+    },
+    Stable: {
+        'Alloy Mixing': {
+            id: 'Alloy Mixing',
+            name: 'Alloy Mixing',
+            description: 'Lvl 5: Unlocks Knights (Heavy Cavalry).',
+            baseCost: { [ResourceEnum.Steel]: 1000, [ResourceEnum.Knowledge]: 1000 },
+            growthFactor: 1.9,
+            requirement: { tech: 'Metallurgy', level: 8 },
+            type: 'Infinite',
+            maxLevel: 10
+        }
+    }
 };
 
 // Flattened version for easy lookup by techId

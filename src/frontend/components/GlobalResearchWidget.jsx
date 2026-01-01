@@ -6,6 +6,7 @@ const GlobalResearchWidget = ({ onClick }) => {
   const [activeResearch, setActiveResearch] = useState(null);
   const [researchName, setResearchName] = useState('');
   const [duration, setDuration] = useState(0);
+  const [currentLevel, setCurrentLevel] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -16,6 +17,7 @@ const GlobalResearchWidget = ({ onClick }) => {
         
         if (res && res.active) {
           setActiveResearch(res.active);
+          setCurrentLevel((res.techLevels && res.techLevels[res.active.techId]) || 0);
           // Find name
           let name = 'Unknown Tech';
           let dur = 60;
@@ -79,7 +81,7 @@ const GlobalResearchWidget = ({ onClick }) => {
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
         <div className="font-cinzel" style={{ fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: 'bold', letterSpacing: 0.5 }}>
-          {researchName}
+          {researchName} {currentLevel > 0 && <span style={{ color: 'var(--accent-gold)', fontSize: '0.75rem' }}>(Lvl {currentLevel})</span>}
         </div>
         <div style={{ width: '100%', height: 6, background: 'rgba(0,0,0,0.3)', borderRadius: 3, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
           <div style={{ 

@@ -10,7 +10,7 @@ const TARGET_PRIORITY = [
     UnitTypeEnum.Militia,
     UnitTypeEnum.Spearmen,
     UnitTypeEnum.Knights,
-    UnitTypeEnum.TradeCart,
+    UnitTypeEnum.SupplyCart,
     UnitTypeEnum.Scout
 ];
 

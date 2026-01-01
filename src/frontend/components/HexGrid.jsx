@@ -203,6 +203,7 @@ export default function HexGrid({ width, height, items, onHexClick, renderHexCon
               <div 
                 key={item.id || idx} 
                 data-hexid={item.id}
+                title={item.tooltip || item.title || undefined}
                 className={`hex ${isHidden ? 'hidden-tile' : terrainClass} ${item.owned ? 'owned' : ''} ${item.allied ? 'allied' : ''} ${item.enemy ? 'enemy' : ''} ${isZooming ? 'zooming' : ''} ${isSelected ? 'selected' : ''} ${item.isRegionCenter ? 'region-center' : ''}`}
                 onClick={(ev) => handleHexClick(item, ev)}
                 style={{ 

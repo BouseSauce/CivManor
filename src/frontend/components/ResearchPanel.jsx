@@ -102,7 +102,7 @@ export default function ResearchPanel({ area, onRefresh, buildingId = null }) {
     setLoading(false);
   };
 
-  const { researched = [], active = null, defs = {} } = researchState;
+  const { researched = [], active = null, defs = {}, techLevels = {} } = researchState;
 
   // Vitality block: compute time-saved based on research levels
   const vitalityBlock = (() => {
@@ -110,13 +110,13 @@ export default function ResearchPanel({ area, onRefresh, buildingId = null }) {
       const thLvl = (area && (area.buildings || []).find(b => b.id === 'TownHall') && (area.buildings.find(b => b.id==='TownHall').level || 0)) || (area && area.buildings && area.buildings['TownHall']) || 0;
       const baseRatePerHour = 0.1 * Math.max(0, thLvl);
       if (!baseRatePerHour) return null;
-      const sanLvl = (area && area.techLevels && area.techLevels['Sanitation Works']) || 0;
-      const medLvl = (area && area.techLevels && area.techLevels['Medical Alchemy']) || 0;
-      const total = (sanLvl || 0) + (medLvl || 0);
+      const sanLvl = techLevels['Basic Sanitation'] || 0;
+      const litLvl = techLevels['Literacy'] || 0;
+      const total = (sanLvl || 0) + (litLvl || 0);
       const baseTimer = Math.round(3600 / (baseRatePerHour * (POP_GROWTH_MULTIPLIER || 1)));
       const modifiedTimer = Math.round(baseTimer / (1 + (total * 0.1)));
       const saved = Math.max(0, baseTimer - modifiedTimer);
-      return { baseTimer, modifiedTimer, saved, sanLvl, medLvl };
+      return { baseTimer, modifiedTimer, saved, sanLvl, litLvl };
     } catch (e) { return null; }
   })();
 
@@ -150,6 +150,7 @@ export default function ResearchPanel({ area, onRefresh, buildingId = null }) {
               def={defs[tid] || {}}
               researched={(researched || []).includes(tid)}
               researchedList={researched || []}
+              techLevels={techLevels || {}}
               active={active}
               onStart={start}
               area={area}
@@ -168,7 +169,7 @@ export default function ResearchPanel({ area, onRefresh, buildingId = null }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
                 <div style={{ fontSize: '0.9rem' }}>Next Villager (base): <strong>{vitalityBlock.baseTimer}s</strong></div>
                 <div style={{ fontSize: '0.9rem' }}>Next Villager (with Research): <strong>{vitalityBlock.modifiedTimer}s</strong> <span style={{ color: '#aaffaa' }}> (Saved {vitalityBlock.saved}s)</span></div>
-                <div style={{ fontSize: '0.85rem', color: '#bbb' }}>Sanitation Lvl: {vitalityBlock.sanLvl} • Medical Lvl: {vitalityBlock.medLvl}</div>
+                <div style={{ fontSize: '0.85rem', color: '#bbb' }}>Sanitation Lvl: {vitalityBlock.sanLvl} • Literacy Lvl: {vitalityBlock.litLvl}</div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><i className="fas fa-cornucopia" style={{ color: '#f6c357' }}></i> Food Efficiency</div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><i className="fas fa-drafting-compass" style={{ color: '#9ad0ff' }}></i> Urban Planning</div>

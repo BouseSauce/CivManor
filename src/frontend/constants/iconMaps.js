@@ -5,7 +5,6 @@ export const RESOURCE_ICON_MAP = {
   Food: { icon: 'fa-bowl-food', color: '#e6c27a' },
   Meat: { icon: 'fa-drumstick-bite', color: '#c76b56' },
   Berries: { icon: 'fa-berry', color: '#b05a8b' },
-  Gold: { icon: 'fa-coins', color: '#e6c27a' },
   Planks: { icon: 'fa-layer-group', color: '#8b6b4a' },
   Bread: { icon: 'fa-bread-slice', color: '#e0b96a' },
   Fish: { icon: 'fa-fish', color: '#4bb0c6' },
@@ -17,12 +16,7 @@ export const RESOURCE_ICON_MAP = {
   Ingots: { icon: 'fa-cubes-stacked', color: '#a68b6f' },
   Steel: { icon: 'fa-shield-halved', color: '#6ea0c1' },
   Knowledge: { icon: 'fa-book', color: '#67b0ff' },
-  Leather: { icon: 'fa-scroll', color: '#c48a4f' },
-  Hides: { icon: 'fa-paw', color: '#8b6b4a' },
-  SimpleSpear: { icon: 'fa-khanda', color: '#8a8a8a' },
   Trebuchet: { icon: 'fa-chess-rook', color: '#d1c6a9' },
-  GoldOre: { icon: 'fa-gem', color: '#f0d9b5' },
-  GoldIngot: { icon: 'fa-coins', color: '#f5e6b8' },
   Horses: { icon: 'fa-horse', color: '#b77a50' },
   Captives: { icon: 'fa-user-lock', color: '#8a6f6f' },
   Villager: { icon: 'fa-user', color: '#ffffff' }
@@ -34,15 +28,16 @@ export const UNIT_ICON_MAP = {
   Spearmen: { icon: 'fa-khanda', color: '#adb6bf' },
   Knights: { icon: 'fa-horse-head', color: '#ffd700' },
   Trebuchet: { icon: 'fa-chess-rook', color: '#8d6e63' },
-  TradeCart: { icon: 'fa-cart-shopping', color: '#c5a059' },
   Scout: { icon: 'fa-binoculars', color: '#7fb56d' },
   ManAtArms: { icon: 'fa-shield-halved', color: '#9ea7b1' },
   ImperialGuard: { icon: 'fa-crown', color: '#ffd700' },
   Archer: { icon: 'fa-bow-arrow', color: '#7fb56d' },
-  SupplyWagon: { icon: 'fa-truck-ramp-box', color: '#8b6b4a' },
   Mangonel: { icon: 'fa-fire-burner', color: '#c76b56' },
   Spy: { icon: 'fa-user-secret', color: '#67b0ff' },
-  Scholar: { icon: 'fa-book-open-reader', color: '#67b0ff' }
+  Scholar: { icon: 'fa-book-open-reader', color: '#67b0ff' },
+  CargoWagon: { icon: 'fa-cart-flatbed', color: '#c5a059' },
+  LargeCargoWagon: { icon: 'fa-truck-ramp-box', color: '#8b6b4a' },
+  ClaimCart: { icon: 'fa-flag', color: '#ffd700' }
 };
 
 export function getIconForResource(key) {

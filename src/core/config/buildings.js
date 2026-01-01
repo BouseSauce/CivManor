@@ -18,25 +18,9 @@ export const BUILDING_CONFIG = {
         requirement: null,
         allowsScholars: true,
         nameEvolution: [
-            { maxLevel: 10, name: 'Farmhouse', icon: 'fa-warehouse' },
+            { maxLevel: 10, name: 'Settlement Hall', icon: 'fa-warehouse' },
             { maxLevel: 20, name: 'Colonial Estate', icon: 'fa-landmark' },
             { maxLevel: 999, name: 'Imperial Manor', icon: 'fa-chess-rook' }
-        ],
-        civicUpgrades: [
-            {
-                id: 'stone_well',
-                name: 'Stone Well',
-                cost: { [ResourceEnum.Stone]: 500 },
-                description: 'Provides clean water, reducing disease and boosting growth (+10%).',
-                effect: { growthBonus: 0.10 }
-            },
-            {
-                id: 'public_oven',
-                name: 'Public Oven',
-                cost: { [ResourceEnum.Stone]: 300, [ResourceEnum.Timber]: 300 },
-                description: 'Community cooking area that improves food efficiency and growth (+5%).',
-                effect: { growthBonus: 0.05 }
-            }
         ]
     },
 
@@ -69,25 +53,22 @@ export const BUILDING_CONFIG = {
         category: 'Economy',
         tags: ['economy', 'storage'],
         description: 'Increases the maximum storage capacity for all resource types.',
-        growthFactor: 1.5,
+        growthFactor: 1.6,
         baseCost: { [ResourceEnum.Timber]: 150, [ResourceEnum.Stone]: 75 },
         workforceCap: 0,
-        // Start with greatly reduced capacity to encourage upgrading the Storehouse
         storageBase: {
-            [ResourceEnum.Timber]: 500,
-            [ResourceEnum.Stone]: 400,
-            [ResourceEnum.Food]: 10000,
-            [ResourceEnum.Bread]: 10000,
-            [ResourceEnum.Planks]: 500,
-            [ResourceEnum.IronIngot]: 400,
-            [ResourceEnum.Coal]: 400,
-            [ResourceEnum.Steel]: 300,
-            [ResourceEnum.Knowledge]: 100,
-            [ResourceEnum.GoldOre]: 200,
-            [ResourceEnum.GoldIngot]: 150
+            [ResourceEnum.Timber]: 2500,
+            [ResourceEnum.Stone]: 2000,
+            [ResourceEnum.Food]: 2500,
+            [ResourceEnum.Bread]: 2500,
+            [ResourceEnum.Planks]: 1200,
+            [ResourceEnum.IronIngot]: 1000,
+            [ResourceEnum.Coal]: 1000,
+            [ResourceEnum.Steel]: 800,
+            [ResourceEnum.Knowledge]: 200
         },
-        storageMultiplier: 1.20,
-        baseOutput: { storageCapacity: 2500 },
+        storageMultiplier: 1.5,
+        baseOutput: {},
         requirement: null
     },
 
@@ -100,8 +81,7 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Timber]: 150, [ResourceEnum.Stone]: 100 },
         workforceCap: 5,
         baseOutput: { special: 'Recruits Militia and Spearmen' },
-        // Require the Settlement Hall (TownHall) to reach level 3 before Barracks is available
-        requirement: { buildings: { TownHall: 3 } }
+        requirement: { building: 'TownHall', level: 1 }
     },
 
     Sawpit: {
@@ -112,8 +92,8 @@ export const BUILDING_CONFIG = {
         growthFactor: 1.5,
         baseCost: { [ResourceEnum.Timber]: 500, [ResourceEnum.Stone]: 200 },
         workforceCap: 3,
-        baseOutput: { ratio: 4 },
-        requirement: { building: 'TownHall', level: 5 }
+        baseOutput: { ratio: 4, planksPerHour: 18 },
+        requirement: { tech: 'Plank Refinement', level: 1 }
     },
     Bloomery: {
         id: 'Bloomery', name: 'Bloomery', displayName: 'Bloomery', tier: 2,
@@ -124,8 +104,8 @@ export const BUILDING_CONFIG = {
         growthFactor: 1.6,
         baseCost: { [ResourceEnum.Timber]: 800, [ResourceEnum.Stone]: 400 },
         workforceCap: 5,
-        baseOutput: { ratio: 5 },
-        requirement: { building: 'StonePit', level: 5 }
+        baseOutput: { ratio: 4, ingotPerHour: 7.2 },
+        requirement: { tech: 'Metallurgy', level: 1 }
     },
     Library: {
         id: 'Library', name: 'Library', displayName: 'Library', tier: 2,
@@ -180,25 +160,12 @@ export const BUILDING_CONFIG = {
         id: 'CharcoalKiln', name: 'Charcoal Kiln', displayName: 'Charcoal Kiln', tier: 3,
         category: 'Industry',
         tags: ['industry', 'processing', 'coal'],
-        description: 'Burns Timber in a low-oxygen environment to produce Coal, essential for Steel production.',
+        description: 'Burns Planks in a low-oxygen environment to produce Coal, essential for Steel production.',
         growthFactor: 1.5,
         baseCost: { [ResourceEnum.Planks]: 800 },
         workforceCap: 3,
-        baseOutput: { ratio: 2 },
+        baseOutput: { ratio: 4, coalPerHour: 36 },
         requirement: { building: 'Bloomery', level: 5 }
-    },
-    Tenements: {
-        id: 'Tenements', name: 'Tenements', displayName: 'Tenements', tier: 3,
-        category: 'Economy',
-        tags: ['economy', 'housing'],
-        description: 'High-density housing that significantly raises the population cap.',
-        growthFactor: 1.8,
-        baseCost: { [ResourceEnum.Planks]: 2000, [ResourceEnum.Stone]: 1000 },
-        workforceCap: 0,
-        baseOutput: { populationCap: 100 },
-        housingBase: 0,
-        housingPerLevel: 100,
-        requirement: { building: 'TownHall', level: 12 }
     },
 
     University: {
@@ -220,7 +187,7 @@ export const BUILDING_CONFIG = {
         growthFactor: 1.5,
         baseCost: { [ResourceEnum.Planks]: 8000, [ResourceEnum.IronIngot]: 4000 },
         workforceCap: 12,
-        baseOutput: { ratio: 5 },
+        baseOutput: { ratio: 4, steelPerHour: 3.6 },
         requirement: { building: 'Bloomery', level: 10 }
     },
     UrbanDistrict: {
@@ -232,31 +199,10 @@ export const BUILDING_CONFIG = {
         baseCost: { [ResourceEnum.Planks]: 10000 },
         workforceCap: 0,
         baseOutput: { popCapMultiplierPercent: 10 },
-        requirement: { building: 'Tenements', level: 10 }
+        requirement: { building: 'TownHall', level: 15 }
     },
 
-    GoldShaft: {
-        id: 'GoldShaft', name: 'Gold Shaft', displayName: 'Gold Shaft', tier: 5,
-        category: 'Extraction',
-        tags: ['extraction', 'gathering', 'gold'],
-        description: 'An elite mining operation specialized in the extraction of raw Gold Ore.',
-        growthFactor: 1.7,
-        baseCost: { [ResourceEnum.Steel]: 15000 },
-        workforceCap: 20,
-        baseOutput: { goldOrePerHour: 20 },
-        requirement: { building: 'University', level: 10 }
-    },
-    RoyalMint: {
-        id: 'RoyalMint', name: 'Royal Mint', displayName: 'Royal Mint', tier: 5,
-        category: 'Industry',
-        tags: ['industry', 'processing', 'gold'],
-        description: 'Processes Gold Ore into Gold Ingots, the ultimate currency for war and trade.',
-        growthFactor: 1.2,
-        baseCost: { [ResourceEnum.Steel]: 20000, [ResourceEnum.Stone]: 10000 },
-        workforceCap: 8,
-        baseOutput: { ratio: 10 },
-        requirement: { building: 'University', level: 12 }
-    },
+    // GoldShaft and RoyalMint removed per game design decision.
     CitadelWatch: {
         id: 'CitadelWatch', name: 'Citadel Watch', displayName: 'Citadel Watch', tier: 5,
         category: 'Military',
@@ -314,6 +260,10 @@ export function computeTotalProductionExtraction(buildingKey, level = 1) {
     const out = {};
     Object.keys(baseOut).forEach(k => {
         const v = baseOut[k];
+        if (k === 'ratio') {
+            out[k] = v; // Ratio is a base conversion factor, not scaled by level
+            return;
+        }
         if (typeof v === 'number') {
             out[k] = Number((v * level * scale).toFixed(4));
         } else {
@@ -325,14 +275,15 @@ export function computeTotalProductionExtraction(buildingKey, level = 1) {
 
 /**
  * Computes the output of a processing building (like a Sawpit or Bloomery).
- * Incorporates a 5% efficiency bonus per level.
+ * The conversion ratio is a fixed base value configured per building.
+ * Building level no longer changes the conversion efficiency — level
+ * may still affect production rates elsewhere, but not the raw->refined ratio.
  * @param {number} inputAvailable - The amount of raw material provided.
  * @param {number} ratio - The conversion ratio (e.g., 5 raw to 1 refined).
- * @param {number} level - The level of the processing building.
- * @returns {number} The amount of refined resource produced.
+ * @param {number} level - The level of the processing building (unused for ratio).
+ * @returns {number} The amount of refined resource producible from input.
  */
 export function computeProcessingOutput(inputAvailable, ratio, level = 1) {
-    const eff = Math.pow(1.05, Math.max(0, level - 1));
-    const raw = (inputAvailable / ratio) * eff;
+    const raw = (inputAvailable / ratio);
     return Number(raw);
 }

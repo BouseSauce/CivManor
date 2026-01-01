@@ -1,59 +1,93 @@
 import React from 'react';
 import { getIconForResource, getColorForIconClass } from '../constants/iconMaps';
 import { GAME_CONFIG } from '../../core/config/gameConfig.js';
+import { checkRequirements } from '../../core/validation/requirements.js';
 
-export default function ResearchCard({ id, def = {}, researched = false, active = null, onStart, area, researchedList = [] }) {
+export default function ResearchCard({ id, def = {}, researched = false, active = null, onStart, area, researchedList = [], techLevels = {} }) {
+  const [tick, setTick] = React.useState(0);
   const costEntries = Object.entries(def.cost || def.baseCost || {});
   const inProgress = active && active.techId === id;
+
+  React.useEffect(() => {
+    if (!inProgress) return;
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [inProgress]);
   
   // Determine if this research should be startable from the UI.
   const isExplicitStartable = typeof def.startable !== 'undefined' ? !!def.startable : null;
-  const isStartable = (isExplicitStartable === null) ? (!!def.durationSeconds) : isExplicitStartable;
+  const isStartable = (isExplicitStartable === null) ? (!!def.durationSeconds || def.type === 'Infinite') : isExplicitStartable;
 
-  // Determine locked state: if def.requiredTownLevel exists, require TownHall level in this area
-  const requiredLvl = def.requiredTownLevel || (def.requirement?.building === 'TownHall' ? def.requirement.level : 0);
-  const thObj = (area && area.buildings && Array.isArray(area.buildings)) ? area.buildings.find(b => b.id === 'TownHall') : null;
-  const areaTownLevel = thObj ? (thObj.level || 0) : 0;
-  const townHallMet = requiredLvl === 0 || (areaTownLevel >= requiredLvl);
+  // Use centralized requirement checker
+  const playerState = {
+    techLevels: techLevels || {},
+    buildingLevels: area?.buildings?.reduce((acc, b) => ({ ...acc, [b.id]: b.level }), {}) || {}
+  };
+  const reqCheck = checkRequirements(id, playerState);
+  const isLocked = !reqCheck.unlocked;
 
-  // Tech Prereqs
-  const prereqs = (() => {
-    if (!def || typeof def !== 'object') return [];
-    if (Array.isArray(def.requiredTechs) && def.requiredTechs.length > 0) return def.requiredTechs;
-    if (def.requirement && def.requirement.tech) return Array.isArray(def.requirement.tech) ? def.requirement.tech : [def.requirement.tech];
-    if (def.required && Array.isArray(def.required)) return def.required;
-    return [];
-  })();
-  const techPrereqsMet = prereqs.every(p => researchedList.includes(p));
-
-  const isLocked = !townHallMet || !techPrereqsMet;
   const canAfford = costEntries.every(([res, amt]) => (area?.resources?.[res] || 0) >= amt);
-  const isAvailable = !isLocked && !researched && !inProgress && isStartable;
+  
+  const isInfinite = def.type === 'Infinite';
+  const currentLevel = techLevels[id] || 0;
+  const isMaxLevel = def.maxLevel && (currentLevel >= def.maxLevel);
+  const isCompleted = researched && !isInfinite;
+  const isAvailable = !isLocked && (!researched || isInfinite) && !isMaxLevel && !inProgress && isStartable && !active;
 
   const flavorText = (def.description || 'No description available.').split('.')[0] + '.';
   const iconClass = def.icon || 'fa-flask';
   const iconColor = getColorForIconClass(iconClass);
 
   const getStatusBadge = () => {
-    if (researched) return <div className="badge badge-active font-cinzel" style={{ background: '#2e7d32' }}>Completed</div>;
+    if (isInfinite && currentLevel > 0) return <div className="badge badge-active font-cinzel" style={{ background: '#2e7d32' }}>Level {currentLevel}</div>;
+    if (isCompleted) return <div className="badge badge-active font-cinzel" style={{ background: '#2e7d32' }}>Completed</div>;
     if (inProgress) return <div className="badge badge-upgrading font-cinzel">Researching</div>;
     if (isLocked) return <div className="badge badge-idle font-cinzel" style={{ background: '#c62828' }}>Locked</div>;
     return <div className="badge badge-idle font-cinzel">Available</div>;
   };
 
+  const showLockedOverlay = isLocked && !researched && !inProgress;
+
   return (
     <div 
       className={`standard-card compact ${isLocked ? 'locked' : ''} ${isAvailable && canAfford ? 'glow-card' : ''} tooltip-container`} 
-      style={{ cursor: isAvailable ? 'pointer' : 'default', position: 'relative', minHeight: '180px', display: 'flex', flexDirection: 'column', padding: '12px' }} 
+      style={{ 
+        cursor: isAvailable ? 'pointer' : 'default', 
+        position: 'relative', 
+        minHeight: '180px', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        padding: '12px',
+        filter: isLocked ? 'grayscale(100%)' : 'none',
+        opacity: isLocked ? 0.7 : 1
+      }} 
       onClick={() => isAvailable && onStart && onStart(id)}
     >
       {/* Cartoonish Tooltip */}
       <div className="cartoon-tooltip">
           <div className="tooltip-flavor font-garamond">{flavorText}</div>
           {def.description && <div className="tooltip-benefit font-garamond" style={{ marginTop: 8 }}>{def.description}</div>}
+          
+          {isLocked && reqCheck.missing.length > 0 && (
+              <div className="tooltip-requirements font-garamond" style={{ marginTop: 12, borderTop: '1px solid rgba(0,0,0,0.1)', paddingTop: 8 }}>
+                  <div style={{ fontWeight: 'bold', color: '#c62828', marginBottom: 4 }}>Locked: {def.name || id}</div>
+                  {reqCheck.missing.map(m => (
+                      <div key={m.id} style={{ fontSize: '0.85rem', color: '#8b0000' }}>
+                          Requires {m.id} Level {m.level} (Current: {playerState[m.type === 'tech' ? 'techLevels' : 'buildingLevels'][m.id] || 0})
+                      </div>
+                  ))}
+              </div>
+          )}
+
+          {/* Special case for Tenements: Show next level effect */}
+          {id === 'Tenements' && (
+              <div className="tooltip-benefit font-garamond" style={{ marginTop: 8, color: '#7cc576', fontWeight: 'bold' }}>
+                  Next Level: +15% Growth Speed (Total: {(currentLevel + 1) * 15}%)
+              </div>
+          )}
       </div>
 
-      {isLocked && (
+      {showLockedOverlay && (
         <div style={{
           position: 'absolute',
           inset: 0,
@@ -93,7 +127,7 @@ export default function ResearchCard({ id, def = {}, researched = false, active 
           {/* Name & Status */}
           <div style={{ textAlign: 'center' }}>
               <h3 className="font-cinzel" style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', fontWeight: 800, lineHeight: 1.2 }}>
-                  {def.name || id}
+                  {def.name || id} {currentLevel > 0 && <span style={{ color: 'var(--accent-gold)', fontSize: '0.9rem' }}>(Lvl {currentLevel})</span>}
               </h3>
               <div style={{ marginTop: 4 }}>
                   {getStatusBadge()}
@@ -110,19 +144,11 @@ export default function ResearchCard({ id, def = {}, researched = false, active 
       <div style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
           {isLocked ? (
               <div className="requirement-box" style={{ marginBottom: 0 }}>
-                  {!townHallMet && (
-                      <div className="req-item unmet font-garamond" style={{ fontSize: '0.85rem', padding: '4px 8px' }}>
-                          <i className="fas fa-times-circle"></i> Town Hall Lvl {requiredLvl}
+                  {reqCheck.missing.map(m => (
+                      <div key={m.id} className="req-item unmet font-garamond" style={{ fontSize: '0.85rem', padding: '4px 8px' }}>
+                          <i className="fas fa-times-circle"></i> {m.id} Lvl {m.level}
                       </div>
-                  )}
-                  {prereqs.map(p => {
-                      if (researchedList.includes(p)) return null;
-                      return (
-                          <div key={p} className="req-item unmet font-garamond" style={{ fontSize: '0.85rem', padding: '4px 8px' }}>
-                              <i className="fas fa-times-circle"></i> {p}
-                          </div>
-                      );
-                  })}
+                  ))}
               </div>
           ) : inProgress ? (
               <div>
@@ -132,47 +158,40 @@ export default function ResearchCard({ id, def = {}, researched = false, active 
                           {(() => {
                               if (!active) return '0%';
                               const now = Date.now();
-                              const total = active.durationSeconds * 1000;
+                              // Use totalTicks/durationSeconds from server, fallback to 1
+                              const total = (active.totalTicks || active.durationSeconds || active.totalTime || 1) * 1000;
                               const elapsed = Math.min(now - active.startedAt, total);
-                              return `${Math.floor((elapsed / total) * 100)}%`;
+                              const pct = Math.floor((elapsed / total) * 100);
+                              return `${isNaN(pct) ? 0 : pct}%`;
                           })()}
                       </span>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-                        <div className="font-cinzel" style={{ 
-                            background: 'var(--wood-dark)', 
-                            color: 'var(--text-main)', 
-                            padding: '8px 20px', 
-                            borderRadius: 20, 
-                            fontSize: '0.9rem', 
-                            fontWeight: 800,
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8
-                        }}>
-                            <i className="fa-solid fa-lock"></i> LOCKED
-                        </div>
-
-                        <div style={{ maxWidth: 260, textAlign: 'left', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                            <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--text-main)' }}>Requirements</div>
-                            {!townHallMet && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                    <i className="fas fa-landmark" style={{ color: '#c5a059' }}></i>
-                                    <div>Town Hall Lvl {requiredLvl}</div>
-                                </div>
-                            )}
-                            {prereqs.filter(p => !researchedList.includes(p)).length === 0 ? (
-                                <div style={{ opacity: 0.9 }}>Other requirements unmet</div>
-                            ) : (
-                                prereqs.filter(p => !researchedList.includes(p)).map(p => (
-                                    <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                        <i className="fa-solid fa-flask" style={{ color: '#67b0ff' }}></i>
-                                        <div>{p}</div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
+                  </div>
+                  {/* Progress Bar */}
+                  <div style={{ width: '100%', height: '6px', background: 'rgba(0,0,0,0.4)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ 
+                          width: (() => {
+                              if (!active) return '0%';
+                              const now = Date.now();
+                              const total = (active.totalTicks || active.durationSeconds || active.totalTime || 1) * 1000;
+                              const elapsed = Math.min(now - active.startedAt, total);
+                              const pct = Math.floor((elapsed / total) * 100);
+                              return `${isNaN(pct) ? 0 : pct}%`;
+                          })(),
+                          height: '100%', 
+                          background: '#4caf50',
+                          transition: 'width 0.5s linear'
+                      }}></div>
+                  </div>
+                  {/* Time Remaining */}
+                  <div style={{ textAlign: 'right', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                      {(() => {
+                          if (!active) return '';
+                          const now = Date.now();
+                          const total = (active.totalTicks || active.durationSeconds || active.totalTime || 1) * 1000;
+                          const elapsed = Math.min(now - active.startedAt, total);
+                          const remaining = Math.max(0, Math.ceil((total - elapsed) / 1000));
+                          return `${remaining}s remaining`;
+                      })()}
                   </div>
               </div>
           ) : (
@@ -199,7 +218,7 @@ export default function ResearchCard({ id, def = {}, researched = false, active 
                       disabled={!isAvailable}
                       style={{ width: '100%', padding: '6px 0', fontSize: '0.9rem' }}
                   >
-                      {researched ? 'Completed' : 'Start Research'}
+                      {isCompleted ? 'Completed' : (isInfinite && currentLevel > 0 ? `Research Lvl ${currentLevel + 1}` : 'Start Research')}
                   </button>
               </div>
           )}

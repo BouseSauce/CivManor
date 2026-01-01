@@ -49,21 +49,21 @@ function computeStoreCapacity(storeLevel, res) {
     }
 
     // StonePit -> Stone
-    const spLevel = buildings['StonePit'] || 0;
-    const spAssigned = assignments['StonePit'] || 0;
-    if (spLevel>0 && spAssigned>0) {
+    const stonePitLevel = buildings['StonePit'] || 0;
+    const stonePitAssigned = assignments['StonePit'] || 0;
+    if (stonePitLevel>0 && stonePitAssigned>0) {
       const base = PRODUCTION_RATES.stonePitPerWorkerPerSecond || 0.1;
-      const amt = getOutput(base, spLevel, spAssigned);
+      const amt = getOutput(base, stonePitLevel, stonePitAssigned);
       deltas['Stone'] = (deltas['Stone']||0) + amt;
     }
 
     // Sawpit -> Planks (consumes Timber)
-    const spLevel = buildings['Sawpit'] || 0;
-    const spAssigned = assignments['Sawpit'] || 0;
-    if (spLevel>0 && spAssigned>0) {
-      const potentialPlanks = getOutput(PRODUCTION_RATES.planksPerWorkerPerSecond, spLevel, spAssigned);
+    const sawpitLevel = buildings['Sawpit'] || 0;
+    const sawpitAssigned = assignments['Sawpit'] || 0;
+    if (sawpitLevel>0 && sawpitAssigned>0) {
+      const potentialPlanks = getOutput(PRODUCTION_RATES.planksPerWorkerPerSecond, sawpitLevel, sawpitAssigned);
       const availableTimber = resources['Timber'] || 0;
-      const maxByInput = computeProcessingOutput(availableTimber, 4.0, spLevel);
+      const maxByInput = computeProcessingOutput(availableTimber, 4.0, sawpitLevel);
       const planksProduced = Math.min(potentialPlanks, maxByInput);
       const timberConsumed = planksProduced * 4.0;
       if (planksProduced>0) {
@@ -72,12 +72,11 @@ function computeStoreCapacity(storeLevel, res) {
       }
     }
 
-    // TownHall -> Food (Gathering)
-    const thLevel = buildings['TownHall'] || 0;
-    const thAssigned = assignments['TownHall'] || 0;
-    if (thLevel > 0 && thAssigned > 0) {
-      const amt = getOutput(0.15, thLevel, thAssigned);
-      deltas['Food'] = (deltas['Food'] || 0) + amt;
+    // Farmhouse -> Bread (per level)
+    const fhLevel = buildings['Farmhouse'] || 0;
+    if (fhLevel>0) {
+      const amt = getOutput(PRODUCTION_RATES.breadPerLevelPerSecond, fhLevel, 1);
+      deltas['Bread'] = (deltas['Bread']||0) + amt;
     }
 
     // Farm -> Food
@@ -86,23 +85,19 @@ function computeStoreCapacity(storeLevel, res) {
     if (fLevel>0 && fAssigned>0) {
       const amt = getOutput(PRODUCTION_RATES.foodPerWorkerPerSecond, fLevel, fAssigned);
       deltas['Food'] = (deltas['Food']||0) + amt;
-      if (fLevel>=5) {
-        const hAmt = getOutput(PRODUCTION_RATES.hidesPerWorkerPerSecond, fLevel, fAssigned);
-        deltas['Hides'] = (deltas['Hides']||0) + hAmt;
-      }
     }
 
-    // Charcoal Kiln -> Coal (consumes Timber)
+    // Charcoal Kiln -> Coal (consumes Planks)
     const ckLevel = buildings['CharcoalKiln'] || 0;
     const ckAssigned = assignments['CharcoalKiln'] || 0;
     if (ckLevel>0 && ckAssigned>0) {
       const potentialCoal = getOutput(PRODUCTION_RATES.coalPerWorkerPerSecond, ckLevel, ckAssigned);
-      const availableTimber = resources['Timber'] || 0;
-      const maxByInput = computeProcessingOutput(availableTimber, 3.0, ckLevel);
+      const availablePlanks = resources['Planks'] || 0;
+      const maxByInput = computeProcessingOutput(availablePlanks, 3.0, ckLevel);
       const coalProduced = Math.min(potentialCoal, maxByInput);
-      const timberConsumed = coalProduced * 3.0;
+      const planksConsumed = coalProduced * 3.0;
       if (coalProduced>0) {
-        deltas['Timber'] = (deltas['Timber']||0) - timberConsumed;
+        deltas['Planks'] = (deltas['Planks']||0) - planksConsumed;
         deltas['Coal'] = (deltas['Coal']||0) + coalProduced;
       }
     }

@@ -21,7 +21,7 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
     (queue || []).forEach((item) => {
       const key = `${item.areaId || item.areaName || ''}:${item.type}:${item.id || item.name}`;
       // look for common time fields
-      const secs = parseSeconds(item.secondsRemaining) ?? parseSeconds(item.timeRemainingSeconds) ?? parseSeconds(item.timeRemaining) ?? parseSeconds(item.seconds);
+      const secs = parseSeconds(item.secondsRemaining) ?? parseSeconds(item.timeRemainingSeconds) ?? parseSeconds(item.timeRemaining) ?? parseSeconds(item.seconds) ?? parseSeconds(item.ticksRemaining);
       next[key] = secs;
     });
     setSecondsMap(next);
@@ -83,7 +83,7 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
       seen.add(k);
       const secs = (typeof secondsMap[k] !== 'undefined' && secondsMap[k] !== null)
         ? secondsMap[k]
-        : (parseSeconds(item.secondsRemaining) ?? parseSeconds(item.timeRemainingSeconds) ?? parseSeconds(item.timeRemaining) ?? parseSeconds(item.seconds));
+        : (parseSeconds(item.secondsRemaining) ?? parseSeconds(item.timeRemainingSeconds) ?? parseSeconds(item.timeRemaining) ?? parseSeconds(item.seconds) ?? parseSeconds(item.ticksRemaining));
       const prog = (typeof item.totalTime === 'number' && secs != null)
         ? Math.max(0, Math.min(100, Math.floor(((item.totalTime - secs) / item.totalTime) * 100)))
         : (item.progress || 0);
@@ -95,24 +95,15 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
 
   return (
     <div className="beveled-panel" style={{ marginBottom: '12px', padding: '12px' }}>
-      <div className="font-cinzel" style={{ 
-        fontSize: '1.2em', 
-        color: '#e0cda0', 
-        marginBottom: '12px', 
-        borderBottom: '1px solid #5c4033',
-        paddingBottom: '6px'
-      }}>
-        Construction Queue
-      </div>
-      
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {(!queue || queue.length === 0) ? (
-          <div className="font-garamond" style={{ color: '#aaa', fontStyle: 'italic' }}>Nothing is currently building.</div>
+        {(!visibleQueue || visibleQueue.length === 0) ? (
+          <div className="font-garamond" style={{ color: '#aaa', fontStyle: 'italic' }}>Nothing is currently in progress.</div>
         ) : (
           visibleQueue.map((item) => {
             const key = item.__key;
             const secs = item.__secs;
             const prog = item.__prog;
+            const isResearch = item.type === 'Research';
             return (
               <div
                 key={key}
@@ -125,15 +116,22 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
                     gap: '12px', 
                     cursor: onItemClick ? 'pointer' : 'default',
                     padding: '8px 12px',
-                    background: 'rgba(0,0,0,0.2)'
+                    background: 'rgba(0,0,0,0.2)',
+                    borderLeft: isResearch ? '4px solid #aaffaa' : '4px solid var(--accent-gold)'
                 }}
               >
-                <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                  <div className="font-cinzel" style={{ fontWeight: 700, color: '#e0cda0', fontSize: '0.95em' }}>
-                    {item.name || item.id}{item.areaName ? ` — ${item.areaName}` : ''}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                  <div style={{ width: '32px', textAlign: 'center' }}>
+                    <i className={`fa-solid ${isResearch ? 'fa-flask' : (item.type === 'Unit' ? 'fa-person-military-pointing' : 'fa-hammer')}`} 
+                       style={{ color: isResearch ? '#aaffaa' : 'var(--accent-gold)', fontSize: '1.2rem' }}></i>
                   </div>
-                  <div className="font-garamond" style={{ fontSize: '0.9rem', color: '#ccc' }}>
-                    {item.type} {item.count ? `— ${item.count}x` : ''} {secs != null ? `— ${humanTime(secs)} remaining` : ''}
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div className="font-cinzel" style={{ fontWeight: 700, color: '#e0cda0', fontSize: '0.95em' }}>
+                      {item.name || item.id}{item.areaName ? ` — ${item.areaName}` : ''}
+                    </div>
+                    <div className="font-garamond" style={{ fontSize: '0.9rem', color: '#ccc' }}>
+                      {item.type} {item.count ? `— ${item.count}x` : ''} {secs != null ? `— ${humanTime(secs)} remaining` : ''}
+                    </div>
                   </div>
                 </div>
                 
@@ -141,7 +139,7 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
                   <div className="progress-bar-bg" style={{ height: '8px', background: '#222', border: '1px solid #444', borderRadius: '4px' }}>
                     <div className="progress-bar-fill" style={{ 
                         width: `${prog}%`, 
-                        backgroundColor: 'var(--accent-green)', 
+                        backgroundColor: isResearch ? '#4caf50' : 'var(--accent-green)', 
                         height: '100%',
                         borderRadius: '3px'
                     }} />

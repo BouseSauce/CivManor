@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { getColorForIconClass, getIconForResource } from '../constants/iconMaps';
 import { BUILDING_CONFIG, computeTotalLevelCost, computeTotalProductionExtraction } from '../../core/config/buildings.js';
-import { calculateBuildTime } from '../../core/logic/scaling.js';
+import { calculateBuildTime, calculateStorageCapacity } from '../../core/logic/scaling.js';
 import { GAME_CONFIG } from '../../core/config/gameConfig.js';
 import { PRODUCTION_RATES, PRODUCTION_GROWTH, WORKER_EXP, PRODUCTION_GLOBAL_MULTIPLIER } from '../../core/config/production_fixed.js';
 import { GameClient } from '../api/client';
 import { getUnitConfig, ALL_UNITS } from '../../core/config/units.js';
-import { ResourceEnum } from '../../core/constants/enums.js';
+import { ResourceEnum, UnitTypeEnum } from '../../core/constants/enums.js';
+import { checkRequirements } from '../../core/validation/requirements.js';
 // Research panel removed: building detail now shows locked requirements inline
 
 // --- Helper Components ---
@@ -50,7 +51,7 @@ const LeverToggle = ({ checked, onChange, label }) => (
   </div>
 );
 
-export default function BuildingDetailPanel({ building, area = null, onClose, onAssignVillagers, onUpgrade }) {
+export default function BuildingDetailPanel({ building, area = null, onClose, onAssignVillagers, onUpgrade, readOnly = false }) {
   const _b = building || {};
 
   // --- UI Refactor Styles ---
@@ -162,8 +163,28 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
   else if (typeof cfgForAssign.workforceCap === 'number') computedMax = cfgForAssign.workforceCap * Math.max(1, level);
   const maxAssigned = (typeof _b.maxAssign === 'number') ? _b.maxAssign : computedMax;
   // Disallow assigning villagers to housing buildings and the Storehouse.
-  // Note: TownHall IS allowed (for gathering).
-  const disallowAssignments = _b.id === 'Storehouse' || (_b.tags && _b.tags.includes('housing'));
+  // Additionally, only allow assignments on buildings that produce raw resources
+  // (identified by a numeric baseOutput key that ends with 'PerHour').
+  const cfgForOutput = BUILDING_CONFIG[_b.id] || {};
+    const producesRaw = (() => {
+    try {
+      const bo = cfgForOutput.baseOutput || {};
+      // Exclude espionage/intel buildings explicitly
+      const tags = (cfgForOutput.tags || []).map(t => (t || '').toString().toLowerCase());
+      if (tags.includes('espionage') || tags.includes('intel')) return false;
+      // If any numeric output exists (including `ratio`, `timberPerHour`, etc.), treat as assignable
+      if (Object.keys(bo).some(k => typeof bo[k] === 'number')) return true;
+      // Also allow processing/extraction/industry tagged buildings
+      const relevant = ['processing', 'extraction', 'industry', 'gathering'];
+      if (tags.some(t => relevant.includes(t))) return true;
+      // Explicit exclusion for Watchtower
+      if ((_b.id || '').toString() === 'Watchtower') return false;
+      return false;
+    } catch (e) { return false; }
+  })();
+
+  // Note: TownHall IS allowed (for gathering) because its baseOutput includes a 'foodPerHour'.
+  const disallowAssignments = _b.id === 'Storehouse' || (_b.tags && _b.tags.includes('housing')) || !producesRaw;
   const buildLabel = _b && _b.isUpgrading ? 'Upgrading' : (level > 0 ? 'Upgrade' : 'Build');
   const [upgradeSecs, setUpgradeSecs] = useState((_b && _b.upgradeSecondsRemaining) || null);
 
@@ -212,33 +233,21 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
     setUpgradeLoading(false);
   }, [_b.id]);
 
-  // Per-building persistent auto-assign flag (stored on server)
-  const [localAutoAssign, setLocalAutoAssign] = useState(!!(area && area.autoAssign && area.autoAssign[_b.id]));
-
-  useEffect(() => {
-    setLocalAutoAssign(!!(area && area.autoAssign && area.autoAssign[_b.id]));
-  }, [area?.autoAssign, _b.id]);
-
-  const setAutoAssignEnabled = async (val) => {
-    const nextVal = !!val;
-    setLocalAutoAssign(nextVal);
+  // Per-building persistent auto-assign flag (stored in localStorage as `autoAssign:{areaId}:{buildingId}`)
+  const storageKeyForAuto = (() => {
+    try { const aid = area && area.id ? area.id : (typeof window !== 'undefined' && window.gameState ? window.gameState.activeAreaID : null); return aid && _b && _b.id ? `autoAssign:${aid}:${_b.id}` : null; } catch(e) { return null; }
+  })();
+  const [autoAssignEnabled, setAutoAssignEnabledRaw] = useState(() => {
     try {
-      await api.toggleAutoAssign(area.id, _b.id, nextVal);
-      // Also dispatch to notify other components
-      if (area && area.id) {
-        const updatedAutoAssign = Object.assign({}, area.autoAssign || {}, { [_b.id]: nextVal });
-        window.dispatchEvent(new CustomEvent('area:updated', { 
-          detail: { 
-            areaId: area.id, 
-            autoAssign: updatedAutoAssign 
-          } 
-        }));
-      }
-    } catch (e) {
-      console.error('Failed to toggle auto-assign:', e);
-      // Revert on failure
-      setLocalAutoAssign(!!(area && area.autoAssign && area.autoAssign[_b.id]));
-    }
+      if (!storageKeyForAuto) return false;
+      const v = typeof window !== 'undefined' ? window.localStorage.getItem(storageKeyForAuto) : null;
+      return v === '1' || v === 'true';
+    } catch (e) { return false; }
+  });
+
+  const setAutoAssignEnabled = (val) => {
+    try { if (storageKeyForAuto && typeof window !== 'undefined') window.localStorage.setItem(storageKeyForAuto, val ? '1' : '0'); } catch(e){}
+    setAutoAssignEnabledRaw(!!val);
   };
 
   // Derived pieces moved outside JSX for clearer reconciliation
@@ -337,45 +346,40 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
     return () => clearInterval(id);
   }, [upgradeSecs]);
 
-  // Helper: compute debug production UI outside of JSX to avoid try/catch inside render
-  const computeDebugProductionUI = () => {
-    try {
-      const lvl = _b.level || 0;
-      const assigned = (!isDirty && !isEditing) ? (serverAssignedMain || 0) : (localAssigned || 0);
-      const resources = [];
-      const perWorker = computeTotalProductionExtraction(_b.id, lvl) || {};
-      Object.keys(perWorker).forEach(k => {
-        let base = null;
-        if (k.toLowerCase().includes('timber')) base = PRODUCTION_RATES.timberPerWorkerPerSecond;
-        if (k.toLowerCase().includes('food')) base = PRODUCTION_RATES.foodPerWorkerPerSecond;
-        if (k.toLowerCase().includes('plank')) base = PRODUCTION_RATES.planksPerWorkerPerSecond;
-        if (k.toLowerCase().includes('stone')) base = PRODUCTION_RATES.stonePitPerWorkerPerSecond;
-        const workerFactor = Math.pow(Math.max(1, assigned), WORKER_EXP || 1);
-        const levelMul = Math.pow(PRODUCTION_GROWTH || 1, Math.max(0, lvl - 1));
-        const mul = (PRODUCTION_GLOBAL_MULTIPLIER || 1);
-        const perSecond = base ? (base * workerFactor * levelMul * mul) : (Number(perWorker[k] || 0) / 3600 * Math.max(1, assigned));
-        const perHour = perSecond * 3600;
-        resources.push({ name: k, base, workerFactor, levelMul, mul, perSecond, perHour, assigned });
-      });
+  // Auto-assign logic
+  useEffect(() => {
+    if (autoAssignEnabled && localAssigned < maxAssigned && !isEditing && !isDirty) {
+      const isUniversity = _b.id === 'University';
+      const unitType = isUniversity ? 'Scholar' : 'Villager';
 
-      const idleReason = (localIdleReasons && localIdleReasons[_b.id]) || (area && area.idleReasons && area.idleReasons[_b.id]) || null;
+      const getCount = (type) => {
+        if (!liveArea || !liveArea.units) return 0;
+        if (Array.isArray(liveArea.units)) {
+          return (liveArea.units.find(u => u.type === type || u.id === type) || {}).count || 0;
+        }
+        return liveArea.units[type] || 0;
+      };
 
-      return resources.map(r => (
-        <div key={r.name} style={{ marginBottom: 8 }}>
-          <div style={{ fontWeight: 800 }}>{r.name}</div>
-          <div>Assigned: {r.assigned}</div>
-          {idleReason && <div style={{ color: theme.red }}>Idle reason: {idleReason}</div>}
-          <div>BaseRate/sec: {r.base != null ? r.base : 'N/A'}</div>
-          <div>Worker factor: {Number(r.workerFactor).toFixed(6)}</div>
-          <div>Level multiplier: {Number(r.levelMul).toFixed(6)}</div>
-          <div>Global multiplier: {Number(r.mul).toFixed(3)}</div>
-          <div style={{ marginTop: 4, fontWeight: 700 }}>{Number(r.perHour).toFixed(2)} /hr ({Number(r.perSecond).toFixed(6)} /s)</div>
-        </div>
-      ));
-    } catch (e) {
-      return <div>Debug compute error</div>;
+      const totalUnits = isUniversity ? getCount('Scholar') : getCount('Villager');
+      
+      const totalAssignedOfSameType = Object.entries(areaAssignments).reduce((acc, [k, v]) => {
+        const baseId = k.split(':')[0];
+        const otherIsUniversity = baseId === 'University';
+        if (isUniversity === otherIsUniversity) {
+          return acc + (v || 0);
+        }
+        return acc;
+      }, 0);
+
+      const idleCount = Math.max(0, totalUnits - totalAssignedOfSameType);
+
+      const next = Math.min(maxAssigned, idleCount + localAssigned);
+      if (next > localAssigned) {
+        setLocalAssigned(next);
+        setIsDirty(true);
+      }
     }
-  };
+  }, [autoAssignEnabled, maxAssigned, isEditing, isDirty, liveArea, areaAssignments]);
 
   // Production details removed — cards and detail view will no longer show per-hour production values.
 
@@ -386,14 +390,9 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
       const cfg = BUILDING_CONFIG['Storehouse'];
       if (!cfg || !cfg.storageBase) return null;
       const lvl = _b.level || 0;
-      const mul = cfg.storageMultiplier || 1.0;
       const caps = {};
-      const nextCost = computeTotalLevelCost('Storehouse', lvl + 1) || {};
-      const margin = 1.05;
-      Object.entries(cfg.storageBase).forEach(([res, base]) => {
-        const formulaCap = Math.floor(base * Math.pow(mul, lvl));
-        const needed = nextCost[res] ? Math.ceil(nextCost[res] * margin) : 0;
-        caps[res] = Math.max(formulaCap, needed);
+      Object.keys(cfg.storageBase).forEach(res => {
+        caps[res] = calculateStorageCapacity(res, lvl);
       });
       return caps;
     } catch (e) { return null; }
@@ -410,180 +409,28 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
           Storage Capacity
         </h4>
         <div style={resourceGridStyle}>
-          {(() => {
-            const entries = Object.entries(storehouseCapacities).map(([res, cap]) => {
-              const def = getIconForResource(res) || { icon: 'fa-box', color: '#bbb' };
-              const current = (area?.resources?.[res] !== undefined)
-                ? Math.floor(area.resources[res])
-                : (_b && _b.storage && typeof _b.storage[res] !== 'undefined')
-                  ? Math.floor(_b.storage[res])
-                  : (_b && _b.resources && typeof _b.resources[res] !== 'undefined')
-                    ? Math.floor(_b.resources[res])
-                    : 0;
-              const atCapacity = current >= cap;
-              return { res, cap, def, current, atCapacity };
-            }).filter(e => e.current > 0);
-
-            if (entries.length === 0) {
-              return <div style={{ color: theme.textMuted, fontStyle: 'italic' }}>Empty</div>;
-            }
-
-            return entries.map(e => (
-              <div key={e.res} style={resourceBadgeStyle}>
-                <i className={"fa-solid " + e.def.icon} style={{ color: e.atCapacity ? theme.red : theme.gold }}></i>
+          {Object.entries(storehouseCapacities).map(([res, cap]) => {
+            const def = getIconForResource(res) || { icon: 'fa-box', color: '#bbb' };
+            const current = (area?.resources?.[res] !== undefined)
+              ? Math.floor(area.resources[res])
+              : (_b && _b.storage && typeof _b.storage[res] !== 'undefined')
+                ? Math.floor(_b.storage[res])
+                : (_b && _b.resources && typeof _b.resources[res] !== 'undefined')
+                  ? Math.floor(_b.resources[res])
+                  : 0;
+            const atCapacity = current >= cap;
+            return (
+              <div key={res} style={resourceBadgeStyle}>
+                <i className={"fa-solid " + def.icon} style={{ color: atCapacity ? theme.red : theme.gold }}></i>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '0.85rem', color: e.atCapacity ? theme.red : theme.textMain }}>
-                    {e.current.toLocaleString()} / {e.cap.toLocaleString()}
+                  <span style={{ fontSize: '0.85rem', color: atCapacity ? theme.red : theme.textMain }}>
+                    {current.toLocaleString()} / {cap.toLocaleString()}
                   </span>
-                  <span style={{ fontSize: '0.65rem', color: theme.textMuted, textTransform: 'capitalize' }}>{e.res}</span>
+                  <span style={{ fontSize: '0.65rem', color: theme.textMuted, textTransform: 'capitalize' }}>{res}</span>
                 </div>
               </div>
-            ));
-          })()}
-        </div>
-      </div>
-    );
-  };
-
-  const renderTownHallControls = () => {
-    if (_b.id !== 'TownHall' || notBuilt) return null;
-    
-    const rationLevel = (area && area.stats && typeof area.stats.rationLevel === 'number') ? area.stats.rationLevel : 2;
-    const upgrades = (area && area.buildingUpgrades && area.buildingUpgrades['TownHall']) || [];
-    const availableUpgrades = (BUILDING_CONFIG['TownHall'] && BUILDING_CONFIG['TownHall'].civicUpgrades) || [];
-
-    const setRationLevel = async (lvl) => {
-        try {
-            const areaId = area && area.id ? area.id : (window.gameState && window.gameState.activeAreaID);
-            if (!areaId) return;
-            await GameClient.setRationLevel(areaId, lvl);
-            // Refresh
-            try { window.dispatchEvent(new CustomEvent('area:refresh-request', { detail: { areaId } })); } catch (e) {}
-        } catch (e) {
-            alert('Failed to set ration level');
-        }
-    };
-
-    const buyUpgrade = async (upgId) => {
-        try {
-            const areaId = area && area.id ? area.id : (window.gameState && window.gameState.activeAreaID);
-            if (!areaId) return;
-            await GameClient.buyCivicUpgrade(areaId, 'TownHall', upgId);
-            // Refresh
-            try { window.dispatchEvent(new CustomEvent('area:refresh-request', { detail: { areaId } })); } catch (e) {}
-        } catch (e) {
-            alert(e.message || 'Failed to buy upgrade');
-        }
-    };
-
-    return (
-      <div style={sectionStyle}>
-        <h4 style={{ margin: '0 0 15px 0', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '1.5px', color: theme.accentGold, fontWeight: 900, borderBottom: `1px solid ${theme.border}`, paddingBottom: 8 }}>
-          <i className="fas fa-wheat-awn" style={{ marginRight: 8 }}></i> Population Management
-        </h4>
-
-        {/* Ration Level */}
-        <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: theme.textMuted, marginBottom: 8 }}>RATION LEVEL</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-                {[
-                    { lvl: 0, label: 'None', desc: 'Starvation (-50 Approval)' },
-                    { lvl: 1, label: 'Half', desc: 'No Growth (-10 Approval)' },
-                    { lvl: 2, label: 'Normal', desc: 'Standard Growth' },
-                    { lvl: 3, label: 'Double', desc: 'Double Growth (+10 Approval)' }
-                ].map(opt => (
-                    <button 
-                        key={opt.lvl}
-                        onClick={() => setRationLevel(opt.lvl)}
-                        style={{
-                            flex: 1,
-                            padding: '8px',
-                            background: rationLevel === opt.lvl ? theme.gold : 'rgba(255,255,255,0.05)',
-                            color: rationLevel === opt.lvl ? '#000' : theme.textMain,
-                            border: `1px solid ${rationLevel === opt.lvl ? theme.gold : 'rgba(255,255,255,0.1)'}`,
-                            borderRadius: 4,
-                            cursor: 'pointer',
-                            fontWeight: 700,
-                            fontSize: '0.8rem'
-                        }}
-                        title={opt.desc}
-                    >
-                        {opt.label}
-                    </button>
-                ))}
-            </div>
-            <div style={{ marginTop: 4, fontSize: '0.7rem', color: theme.textMuted, textAlign: 'center' }}>
-                {[
-                    { lvl: 0, desc: 'Starvation (-50 Approval)' },
-                    { lvl: 1, desc: 'No Growth (-10 Approval)' },
-                    { lvl: 2, desc: 'Standard Growth' },
-                    { lvl: 3, desc: 'Double Growth (+10 Approval)' }
-                ].find(o => o.lvl === rationLevel)?.desc}
-            </div>
-            {liveArea && liveArea.stats && liveArea.stats.nextVillagerSeconds !== null && (
-                <div style={{ marginTop: 12, padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: 4, textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.65rem', color: theme.accentGold, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}>Next Villager Arrival</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: theme.textMain }}>
-                        {liveArea.stats.nextVillagerSeconds > 60 
-                            ? `${Math.floor(liveArea.stats.nextVillagerSeconds / 60)}m ${liveArea.stats.nextVillagerSeconds % 60}s` 
-                            : `${liveArea.stats.nextVillagerSeconds}s`}
-                    </div>
-                    <div style={{ fontSize: '0.65rem', color: theme.textMuted, marginTop: 2 }}>
-                        Growth Rate: {Number(liveArea.stats.growthPerHour || 0).toFixed(2)} / hr
-                    </div>
-                </div>
-            )}
-        </div>
-
-        {/* Civic Upgrades */}
-        <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: theme.textMuted, marginBottom: 8 }}>CIVIC UPGRADES</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {availableUpgrades.map(u => {
-                    const owned = upgrades.includes(u.id);
-                    const canAfford = !owned && Object.entries(u.cost).every(([r, amt]) => (area?.resources?.[r] || 0) >= amt);
-                    
-                    return (
-                        <div key={u.id} style={{ 
-                            padding: '10px', 
-                            background: owned ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255,255,255,0.03)', 
-                            border: `1px solid ${owned ? '#4caf50' : 'rgba(255,255,255,0.1)'}`,
-                            borderRadius: 6,
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            <div>
-                                <div style={{ fontWeight: 700, color: owned ? '#4caf50' : theme.textMain }}>{u.name} {owned && <i className="fas fa-check-circle"></i>}</div>
-                                <div style={{ fontSize: '0.7rem', color: theme.textMuted }}>{u.description}</div>
-                                {!owned && (
-                                    <div style={{ fontSize: '0.7rem', color: theme.textMuted, marginTop: 4 }}>
-                                        Cost: {Object.entries(u.cost).map(([r, a]) => `${a} ${r}`).join(', ')}
-                                    </div>
-                                )}
-                            </div>
-                            {!owned && (
-                                <button 
-                                    onClick={() => buyUpgrade(u.id)}
-                                    disabled={!canAfford}
-                                    style={{
-                                        padding: '4px 8px',
-                                        background: canAfford ? theme.gold : '#555',
-                                        color: canAfford ? '#000' : '#888',
-                                        border: 'none',
-                                        borderRadius: 4,
-                                        cursor: canAfford ? 'pointer' : 'not-allowed',
-                                        fontWeight: 700,
-                                        fontSize: '0.75rem'
-                                    }}
-                                >
-                                    Buy
-                                </button>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -595,22 +442,32 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
     const cfg = BUILDING_CONFIG[_b.id] || {};
     const supportsPlanks = (cfg.unlocks || []).includes('Planks');
     
-    const liveArea = (typeof window !== 'undefined' && area && area.id && window.__lastFetchedArea && window.__lastFetchedArea[area.id]) ? window.__lastFetchedArea[area.id] : area;
-    const areaAssignments = (liveArea && liveArea.assignments) ? liveArea.assignments : {};
-    const totalAssignedInArea = Object.entries(areaAssignments).reduce((acc, [k, v]) => {
-      return acc + (v || 0);
+    const isUniversity = _b.id === 'University';
+    const unitType = isUniversity ? 'Scholar' : 'Villager';
+
+    const getCount = (type) => {
+      if (!liveArea || !liveArea.units) return 0;
+      if (Array.isArray(liveArea.units)) {
+        return (liveArea.units.find(u => u.type === type || u.id === type) || {}).count || 0;
+      }
+      return liveArea.units[type] || 0;
+    };
+
+    const totalUnits = isUniversity ? getCount('Scholar') : getCount('Villager');
+    
+    const totalAssignedOfSameType = Object.entries(areaAssignments).reduce((acc, [k, v]) => {
+      const baseId = k.split(':')[0];
+      const otherIsUniversity = baseId === 'University';
+      if (isUniversity === otherIsUniversity) {
+        return acc + (v || 0);
+      }
+      return acc;
     }, 0);
 
-    const villagersCount = (liveArea && Array.isArray(liveArea.units))
-      ? (((liveArea.units.find(u => u.type === 'Villager') || {}).count) ?? 0)
-      : (liveArea && liveArea.stats && typeof liveArea.stats.currentPop === 'number')
-        ? liveArea.stats.currentPop
-        : ((liveArea && typeof liveArea.population === 'number') ? liveArea.population : 0);
+    const idleFromArea = Math.max(0, totalUnits - totalAssignedOfSameType);
 
-    const idleFromArea = Math.max(0, villagersCount - totalAssignedInArea);
-
-    const otherBuildingsAssigned = totalAssignedInArea - (serverAssignedMain || 0) - (serverAssignedPlanks || 0);
-    const totalAvailableForThisBuilding = Math.max(0, villagersCount - otherBuildingsAssigned);
+    const otherBuildingsAssigned = totalAssignedOfSameType - (serverAssignedMain || 0) - (serverAssignedPlanks || 0);
+    const totalAvailableForThisBuilding = Math.max(0, totalUnits - otherBuildingsAssigned);
     const absoluteMaxForBuilding = Math.min(maxAssigned, totalAvailableForThisBuilding);
 
     const totalAssigned = (localAssigned || 0) + (supportsPlanks ? (localAssignedPlanks || 0) : 0);
@@ -642,11 +499,13 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
           <h4 style={{ margin: 0, textTransform: 'uppercase', fontSize: '0.85rem', letterSpacing: '1px', color: 'var(--text-muted)', fontWeight: 800 }}>
             Workforce Management
           </h4>
-          <LeverToggle 
-            label="Auto-Assign" 
-            checked={localAutoAssign} 
-            onChange={setAutoAssignEnabled} 
-          />
+          {!readOnly && (
+            <LeverToggle 
+              label="Auto-Assign" 
+              checked={autoAssignEnabled} 
+              onChange={setAutoAssignEnabled} 
+            />
+          )}
         </div>
 
         <SegmentedProgress 
@@ -659,21 +518,23 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div className="stat-box" style={{ width: 36, height: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--wood-dark)', color: 'white' }}>
-                <i className="fas fa-users"></i>
+                <i className={isUniversity ? "fas fa-graduation-cap" : "fas fa-users"}></i>
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-main)' }}>General Labor</div>
+                  <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-main)' }}>{isUniversity ? 'Scholars' : 'General Labor'}</div>
                   <div className="badge badge-level" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>{localAssigned}</div>
                 </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{idleFromArea} idle villagers</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{idleFromArea} idle {isUniversity ? 'scholars' : 'villagers'}</div>
               </div>
             </div>
-            <Stepper 
-              value={localAssigned} 
-              max={Math.max(0, absoluteMaxForBuilding - (localAssignedPlanks || 0))} 
-              onChange={handleSetWorkers} 
-            />
+            {!readOnly && (
+              <Stepper 
+                value={localAssigned} 
+                max={Math.max(0, absoluteMaxForBuilding - (localAssignedPlanks || 0))} 
+                onChange={handleSetWorkers} 
+              />
+            )}
           </div>
 
           {supportsPlanks && (
@@ -690,11 +551,13 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Specialized task</div>
                 </div>
               </div>
-              <Stepper 
-                value={localAssignedPlanks} 
-                max={Math.max(0, absoluteMaxForBuilding - (localAssigned || 0))} 
-                onChange={handleSetPlanks} 
-              />
+              {!readOnly && (
+                <Stepper 
+                  value={localAssignedPlanks} 
+                  max={Math.max(0, absoluteMaxForBuilding - (localAssigned || 0))} 
+                  onChange={handleSetPlanks} 
+                />
+              )}
             </div>
           )}
         </div>
@@ -704,14 +567,14 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
 
   const renderUnitProduction = () => {
     // Show on military production buildings and research buildings for Scholars
-    const productionBuildings = ['Barracks', 'ArcheryRange', 'SiegeWorkshop', 'Stable', 'Library', 'University', 'TownHall', 'Watchtower'];
+    const productionBuildings = ['Barracks', 'ArcheryRange', 'SiegeWorkshop', 'Stable', 'Library', 'University', 'Watchtower'];
     if (!productionBuildings.includes(_b.id)) return null;
     
     // Determine candidate units (filter by building requirement)
     const candidates = ALL_UNITS.filter(u => {
-      // Special case for Scholars: can be trained at TownHall, Library, or University
+      // Special case for Scholars: can be trained at Library or University
       if (u.id === 'Scholar') {
-        return ['TownHall', 'Library', 'University'].includes(_b.id);
+        return ['Library', 'University'].includes(_b.id);
       }
       // Otherwise, filter by the required building
       return u.requiredBuilding === _b.id;
@@ -740,16 +603,13 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
             </div>
             <div style={{ display: 'grid', gap: 10 }}>
               {units.map(u => {
-                // Check requirements
-                const bLevel = _b.level || 0;
-                const reqLevel = u.requiredBuildingLevel || 1;
-                const levelMet = bLevel >= reqLevel;
-                
-                // Check research requirement
-                const userTechs = (window.__account && window.__account.techLevels) || {};
-                const researchMet = !u.requiredResearch || (userTechs[u.requiredResearch] > 0);
-                
-                const isLocked = !levelMet || !researchMet;
+                // Use centralized requirement checker
+                const playerState = {
+                  techLevels: area?.techLevels || (window.__account && window.__account.techLevels) || {},
+                  buildingLevels: area?.buildings?.reduce((acc, b) => ({ ...acc, [b.id]: b.level }), {}) || {}
+                };
+                const reqCheck = checkRequirements(u.id, playerState);
+                const isLocked = !reqCheck.unlocked;
 
                 return (
                   <div key={u.id} style={{ 
@@ -775,7 +635,7 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
                           <div style={{ fontSize: '0.75rem', color: theme.textMuted }}>{u.description}</div>
                         </div>
                       </div>
-                      {!isLocked && (
+                      {!isLocked && !readOnly && (
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                           <input type="number" min={1} defaultValue={1} id={`recruit_${u.id}`} 
                             style={{ width: 50, height: 30, textAlign: 'center', borderRadius: 4, border: `1px solid ${theme.border}`, background: 'rgba(0,0,0,0.2)', color: '#fff' }} 
@@ -799,16 +659,11 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
                     {isLocked && (
                       <div style={{ marginTop: 8, padding: '8px', background: 'rgba(0,0,0,0.1)', borderRadius: 4, fontSize: '0.75rem' }}>
                         <div style={{ fontWeight: 800, color: theme.red, marginBottom: 4, textTransform: 'uppercase', fontSize: '0.65rem' }}>Requirements:</div>
-                        {!levelMet && (
-                          <div style={{ color: theme.red, display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <i className="fas fa-times-circle"></i> Requires {_b.name} Lvl {reqLevel} (Current: {bLevel})
+                        {reqCheck.missing.map(m => (
+                          <div key={m.id} style={{ color: theme.red, display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <i className="fas fa-times-circle"></i> Requires {m.id} Lvl {m.level} (Current: {playerState[m.type === 'tech' ? 'techLevels' : 'buildingLevels'][m.id] || 0})
                           </div>
-                        )}
-                        {!researchMet && (
-                          <div style={{ color: theme.red, display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <i className="fas fa-times-circle"></i> Requires Research: {u.requiredResearch}
-                          </div>
-                        )}
+                        ))}
                       </div>
                     )}
 
@@ -837,22 +692,41 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
   };
 
   const saveAssignments = async () => {
-    if (!isDirty) return;
+    if (!isDirty || !_b.id) return;
     setIsSaving(true);
     try {
-      // Recompute allowed maxima to ensure we don't send invalid values
-      const villagersCount = (area && Array.isArray(area.units))
-        ? ((area.units.find(u => u.type === 'Villager') || {}).count || 0)
-        : ((area && area.population && typeof area.population.total === 'number') ? area.population.total : 0);
+      const isUniversity = _b.id === 'University';
+      const unitType = isUniversity ? 'Scholar' : 'Villager';
+
+      const getCount = (type) => {
+        if (!area || !area.units) return 0;
+        if (Array.isArray(area.units)) {
+          return (area.units.find(u => u.type === type || u.id === type) || {}).count || 0;
+        }
+        return area.units[type] || 0;
+      };
+
+      const totalUnits = isUniversity ? getCount('Scholar') : getCount('Villager');
       const areaAssignments = (area && area.assignments) ? area.assignments : {};
-      const totalAssignedInArea = Object.entries(areaAssignments).reduce((acc, [k, v]) => acc + (v || 0), 0);
       
-      const otherBuildingsAssigned = totalAssignedInArea - (serverAssignedMain || 0) - (serverAssignedPlanks || 0);
-      const totalAvailableForThisBuilding = Math.max(0, villagersCount - otherBuildingsAssigned);
+      const totalAssignedOfSameType = Object.entries(areaAssignments).reduce((acc, [k, v]) => {
+        const baseId = k.split(':')[0];
+        const otherIsUniversity = baseId === 'University';
+        if (isUniversity === otherIsUniversity) {
+          return acc + (v || 0);
+        }
+        return acc;
+      }, 0);
+      
+      const otherBuildingsAssigned = totalAssignedOfSameType - (serverAssignedMain || 0) - (serverAssignedPlanks || 0);
+      const totalAvailableForThisBuilding = Math.max(0, totalUnits - otherBuildingsAssigned);
       const absoluteMaxForBuilding = Math.min(maxAssigned, totalAvailableForThisBuilding);
 
-      const toSendAssigned = Math.max(0, Math.min(absoluteMaxForBuilding, localAssigned || 0));
-      const toSendPlanks = Math.max(0, Math.min(Math.max(0, absoluteMaxForBuilding - toSendAssigned), localAssignedPlanks || 0));
+      let toSendAssigned = Math.max(0, Math.min(absoluteMaxForBuilding, localAssigned || 0));
+      let toSendPlanks = Math.max(0, Math.min(Math.max(0, absoluteMaxForBuilding - toSendAssigned), localAssignedPlanks || 0));
+
+      if (!Number.isFinite(toSendAssigned)) toSendAssigned = 0;
+      if (!Number.isFinite(toSendPlanks)) toSendPlanks = 0;
 
       if (typeof onAssignVillagers === 'function') {
         // Save main workers
@@ -975,48 +849,50 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
             </div>
           </div>
         ) : (
-          <button 
-            onClick={async () => {
-              if (isLocked || building.isUpgrading || upgradeLoading) return;
-              setUpgradeError(null);
-              setUpgradeLoading(true);
-              try {
-                if (isDirty) await saveAssignments();
-                const areaId = area && area.id ? area.id : (window.gameState && window.gameState.activeAreaID);
-                if (!areaId) throw new Error('Missing active area id');
-                const resp = await GameClient.upgradeArea(areaId, _b.id);
-                if (resp && resp.success) {
-                  try { if (typeof onUpgrade === 'function') onUpgrade(_b.id); } catch (e) {}
-                } else {
-                  setUpgradeError(resp?.message || resp?.error || 'Upgrade failed');
+          !readOnly && (
+            <button 
+              onClick={async () => {
+                if (isLocked || building.isUpgrading || upgradeLoading) return;
+                setUpgradeError(null);
+                setUpgradeLoading(true);
+                try {
+                  if (isDirty) await saveAssignments();
+                  const areaId = area && area.id ? area.id : (window.gameState && window.gameState.activeAreaID);
+                  if (!areaId) throw new Error('Missing active area id');
+                  const resp = await GameClient.upgradeArea(areaId, _b.id);
+                  if (resp && resp.success) {
+                    try { if (typeof onUpgrade === 'function') onUpgrade(_b.id); } catch (e) {}
+                  } else {
+                    setUpgradeError(resp?.message || resp?.error || 'Upgrade failed');
+                  }
+                } catch (err) {
+                  setUpgradeError(err.message || 'Upgrade error');
+                } finally {
+                  setUpgradeLoading(false);
                 }
-              } catch (err) {
-                setUpgradeError(err.message || 'Upgrade error');
-              } finally {
-                setUpgradeLoading(false);
-              }
-            }}
-            disabled={!canAfford || upgradeLoading}
-            className={canAfford && !upgradeLoading ? 'glow-button' : ''}
-            style={{
-              width: '100%',
-              padding: '12px',
-              background: canAfford ? 'linear-gradient(145deg, #ff8f00, #ff6f00)' : '#555',
-              color: canAfford ? '#fff' : '#888',
-              border: '1px solid ' + (canAfford ? '#e65100' : '#444'),
-              borderRadius: '4px',
-              fontWeight: 'bold',
-              fontSize: '1rem',
-              cursor: canAfford ? 'pointer' : 'not-allowed',
-              fontFamily: "'MedievalSharp', serif",
-              textTransform: 'uppercase',
-              transition: 'all 0.2s',
-              marginTop: '8px',
-              boxShadow: canAfford ? '0 4px 15px rgba(255, 111, 0, 0.3)' : 'none'
-            }}
-          >
-            {upgradeLoading ? 'Processing...' : (canAfford ? 'Begin Construction' : 'Insufficient Resources')}
-          </button>
+              }}
+              disabled={!canAfford || upgradeLoading}
+              className={canAfford && !upgradeLoading ? 'glow-button' : ''}
+              style={{
+                width: '100%',
+                padding: '12px',
+                background: canAfford ? 'linear-gradient(145deg, #ff8f00, #ff6f00)' : '#555',
+                color: canAfford ? '#fff' : '#888',
+                border: '1px solid ' + (canAfford ? '#e65100' : '#444'),
+                borderRadius: '4px',
+                fontWeight: 'bold',
+                fontSize: '1rem',
+                cursor: canAfford ? 'pointer' : 'not-allowed',
+                fontFamily: "'MedievalSharp', serif",
+                textTransform: 'uppercase',
+                transition: 'all 0.2s',
+                marginTop: '8px',
+                boxShadow: canAfford ? '0 4px 15px rgba(255, 111, 0, 0.3)' : 'none'
+              }}
+            >
+              {upgradeLoading ? 'Processing...' : (canAfford ? 'Begin Construction' : 'Insufficient Resources')}
+            </button>
+          )
         )}
         
         {upgradeError && (
@@ -1130,7 +1006,6 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
         <div style={{ maxHeight: '50vh', overflowY: 'auto' }}>
           {renderStorage()}
           {renderAssignments()}
-          {renderTownHallControls()}
           
           {/* Base Output Section (if applicable) */}
           {BUILDING_CONFIG[_b.id]?.baseOutput && !(['Storehouse'].includes(_b.id)) && (
@@ -1138,6 +1013,47 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
               <h4 style={{ margin: '0 0 10px 0', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '1px', color: theme.textMuted }}>
                 Output (current)
               </h4>
+
+              {/* Ratio Display */}
+                  {(() => {
+                const cfg = BUILDING_CONFIG[_b.id];
+                if (cfg?.baseOutput?.ratio) {
+                  const baseRatio = cfg.baseOutput.ratio;
+                  const currentRatio = Number(baseRatio).toFixed(2);
+                  
+                  // Determine input/output labels for clarity
+                  const labels = {
+                    Sawpit: { in: 'Timber', out: 'Planks' },
+                    Bloomery: { in: 'Stone', out: 'Iron Ingot' },
+                    CharcoalKiln: { in: 'Planks', out: 'Coal' },
+                    SteelWorks: { in: 'Ingot+Coal', out: 'Steel' }
+                  };
+                  const l = labels[_b.id] || { in: 'Raw', out: 'Refined' };
+
+                  return (
+                    <div style={{ 
+                      background: 'rgba(255, 215, 0, 0.05)', 
+                      border: '1px solid rgba(255, 215, 0, 0.2)', 
+                      borderRadius: '6px', 
+                      padding: '10px 15px', 
+                      marginBottom: '15px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}>
+                      <i className="fa-solid fa-right-left" style={{ color: theme.gold }}></i>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: theme.textMuted, fontWeight: 800 }}>Conversion Ratio</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 800, color: theme.gold }}>
+                          {currentRatio} {l.in} <i className="fa-solid fa-arrow-right" style={{ fontSize: '0.7rem', margin: '0 8px', opacity: 0.5 }}></i> 1 {l.out}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               <div style={resourceGridStyle}>
                 {(() => {
                     try {
@@ -1155,7 +1071,9 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
                       return baseRatePerSecond * workerFactor * levelMultiplier * mul * 3600; // per hour
                     };
 
-                    return Object.entries(perWorker).map(([k, v]) => {
+                    return Object.entries(perWorker)
+                      .filter(([k]) => k !== 'ratio') // Filter out ratio from the grid
+                      .map(([k, v]) => {
                       // Normalize label key (e.g., 'foodPerHour' -> 'food')
                       const labelKey = k.replace(/PerHour/i, '').replace(/PerLevel/i, '').toLowerCase();
 
@@ -1240,7 +1158,46 @@ export default function BuildingDetailPanel({ building, area = null, onClose, on
               <details>
                 <summary style={{ cursor: 'pointer', fontWeight: 700, color: 'var(--text-muted)' }}>Debug: computed production (server math)</summary>
                 <div style={{ marginTop: 8 }}>
-                  {computeDebugProductionUI()}
+                  {(() => {
+                    try {
+                      const lvl = _b.level || 0;
+                      const assigned = (!isDirty && !isEditing) ? (serverAssignedMain || 0) : (localAssigned || 0);
+                      const resources = [];
+                      // For other config-driven numeric outputs, gather keys from computeTotalProductionExtraction
+                      const perWorker = computeTotalProductionExtraction(_b.id, lvl) || {};
+                      Object.keys(perWorker).forEach(k => {
+                          // Try to find matching PRODUCTION_RATES key
+                          const key = k.replace(/PerHour/i, '').replace(/([A-Z])/g, c => c).toLowerCase();
+                          // Best-effort mapping
+                          let base = null;
+                          if (k.toLowerCase().includes('timber')) base = PRODUCTION_RATES.timberPerWorkerPerSecond;
+                          if (k.toLowerCase().includes('food')) base = PRODUCTION_RATES.foodPerWorkerPerSecond;
+                          if (k.toLowerCase().includes('plank')) base = PRODUCTION_RATES.planksPerWorkerPerSecond;
+                          if (k.toLowerCase().includes('stone')) base = PRODUCTION_RATES.stonePitPerWorkerPerSecond;
+                          if (base == null) base = null;
+                          const workerFactor = Math.pow(Math.max(1, assigned), WORKER_EXP || 1);
+                          const levelMul = Math.pow(PRODUCTION_GROWTH || 1, Math.max(0, lvl - 1));
+                          const mul = (PRODUCTION_GLOBAL_MULTIPLIER || 1);
+                          const perSecond = base ? (base * workerFactor * levelMul * mul) : (Number(perWorker[k] || 0) / 3600 * Math.max(1, assigned));
+                          const perHour = perSecond * 3600;
+                          resources.push({ name: k, base, workerFactor, levelMul, mul, perSecond, perHour, assigned });
+                        });
+
+                      const idleReason = (localIdleReasons && localIdleReasons[_b.id]) || (area && area.idleReasons && area.idleReasons[_b.id]) || null;
+                      return resources.map(r => (
+                        <div key={r.name} style={{ marginBottom: 8 }}>
+                          <div style={{ fontWeight: 800 }}>{r.name}</div>
+                          <div>Assigned: {r.assigned}</div>
+                          {idleReason && <div style={{ color: theme.red }}>Idle reason: {idleReason}</div>}
+                          <div>BaseRate/sec: {r.base != null ? r.base : 'N/A'}</div>
+                          <div>Worker factor: {Number(r.workerFactor).toFixed(6)}</div>
+                          <div>Level multiplier: {Number(r.levelMul).toFixed(6)}</div>
+                          <div>Global multiplier: {Number(r.mul).toFixed(3)}</div>
+                          <div style={{ marginTop: 4, fontWeight: 700 }}>{Number(r.perHour).toFixed(2)} /hr ({Number(r.perSecond).toFixed(6)} /s)</div>
+                        </div>
+                      ));
+                    } catch (e) { return <div>Debug compute error</div>; }
+                  })()}
                 </div>
               </details>
             </div>

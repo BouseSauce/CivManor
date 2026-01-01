@@ -113,7 +113,7 @@ export const UNIT_CONFIG = {
         class: 'Special',
         icon: 'fa-user-secret',
         populationCost: 1,
-        cost: { [ResourceEnum.Gold]: 100, [ResourceEnum.Food]: 50 },
+        cost: { [ResourceEnum.Knowledge]: 50, [ResourceEnum.Food]: 100 },
         attack: 0.5,
         defense: 0.5,
         hp: 30,
@@ -139,27 +139,69 @@ export const UNIT_CONFIG = {
         trainingTime: 240,
         requiredBuilding: 'Stable',
         requiredBuildingLevel: 5,
-        requiredResearch: 'Heavy Stirrups',
+        requiredResearch: 'Alloy Mixing',
+        requiredResearchLevel: 5,
         description: 'Flanking; high attack/speed.'
     },
 
-    [UnitTypeEnum.SupplyWagon]: {
-        id: UnitTypeEnum.SupplyWagon,
-        name: 'Supply Wagon',
+    [UnitTypeEnum.CargoWagon]: {
+        id: UnitTypeEnum.CargoWagon,
+        name: 'Cargo Wagon',
+        tier: 2,
+        class: 'Logistics',
+        icon: 'fa-cart-flatbed',
+        populationCost: 1,
+        cost: { [ResourceEnum.Planks]: 20, [ResourceEnum.Timber]: 50 },
+        attack: 0.1,
+        defense: 0.5,
+        hp: 50,
+        carryCapacity: 500,
+        speed: 1.0,
+        trainingTime: 60,
+        requiredBuilding: 'Sawpit',
+        requiredBuildingLevel: 1,
+        requiredResearch: 'The Wheel',
+        description: 'Basic transport wagon. Carries 500 resources.'
+    },
+
+    [UnitTypeEnum.LargeCargoWagon]: {
+        id: UnitTypeEnum.LargeCargoWagon,
+        name: 'Large Cargo Wagon',
         tier: 3,
         class: 'Logistics',
-        icon: 'fa-truck-loading',
-        populationCost: 1,
-        cost: { [ResourceEnum.Planks]: 50, [ResourceEnum.Horses]: 1 },
-        attack: 2.0,
-        defense: 2.0,
-        hp: 120,
-        carryCapacity: 2000,
-        trainingTime: 120,
-        requiredBuilding: 'Stable',
-        requiredBuildingLevel: 3,
-        requiredResearch: 'Trading Hub',
-        description: 'High capacity transport.'
+        icon: 'fa-truck-ramp-box',
+        populationCost: 2,
+        cost: { [ResourceEnum.Planks]: 100, [ResourceEnum.IronIngot]: 50 },
+        attack: 0.2,
+        defense: 1.0,
+        hp: 150,
+        carryCapacity: 2500,
+        speed: 0.8,
+        trainingTime: 180,
+        requiredBuilding: 'Sawpit',
+        requiredBuildingLevel: 5,
+        requiredResearch: 'Logistics',
+        requiredResearchLevel: 8,
+        description: 'Heavy transport wagon. Carries 2,500 resources.'
+    },
+
+    [UnitTypeEnum.ClaimCart]: {
+        id: UnitTypeEnum.ClaimCart,
+        name: 'Claim Cart',
+        tier: 4,
+        class: 'Special',
+        icon: 'fa-flag',
+        populationCost: 5,
+        cost: { [ResourceEnum.Planks]: 500, [ResourceEnum.Steel]: 100, [ResourceEnum.Knowledge]: 500 },
+        attack: 0.0,
+        defense: 1.0,
+        hp: 100,
+        speed: 0.5,
+        trainingTime: 1200,
+        requiredBuilding: 'TownHall',
+        requiredBuildingLevel: 5,
+        requiredResearch: 'Sovereignty',
+        description: 'A specialized cart used to establish authority over new territories. Extremely expensive and slow to produce.'
     },
 
     [UnitTypeEnum.Mangonel]: {
@@ -169,7 +211,7 @@ export const UNIT_CONFIG = {
         class: 'Siege',
         icon: 'fa-meteor',
         populationCost: 3,
-        cost: { [ResourceEnum.Stone]: 100, [ResourceEnum.IronIngot]: 20 },
+        cost: { [ResourceEnum.Steel]: 40, [ResourceEnum.Planks]: 200 },
         attack: 10.0,
         defense: 20.0,
         hp: 140,
@@ -196,24 +238,6 @@ export const UNIT_CONFIG = {
         description: 'Anti-structure (Wall breaker).'
     },
 
-    [UnitTypeEnum.Spy]: {
-        id: UnitTypeEnum.Spy,
-        name: 'Spy',
-        tier: 3,
-        class: 'Special',
-        icon: 'fa-user-secret',
-        populationCost: 1,
-        cost: { [ResourceEnum.Knowledge]: 50, [ResourceEnum.Gold]: 100 },
-        attack: 1.0,
-        defense: 1.0,
-        hp: 20,
-        trainingTime: 90,
-        stealth: true,
-        requiredBuilding: 'TownHall',
-        requiredBuildingLevel: 10,
-        description: 'Invisible; reveals tech/timers.'
-    },
-
     [UnitTypeEnum.Scholar]: {
         id: UnitTypeEnum.Scholar,
         name: 'Scholar',
@@ -226,7 +250,8 @@ export const UNIT_CONFIG = {
         defense: 0.1,
         hp: 10,
         trainingTime: 120,
-        requiredBuilding: 'TownHall',
+        // Scholars are trained at Library (or University) rather than the Town Hall
+        requiredBuilding: 'Library',
         requiredBuildingLevel: 1,
         description: 'Educated civilian: provides research bonuses but consumes a villager slot.'
     }

@@ -39,9 +39,8 @@ function inject() {
                 Timber: 5000,
                 Stone: 5000,
                 Food: 5000,
-                Gold: 1000,
                 Knowledge: 200,
-                Coal: 0, Hides: 0, Leather: 0, Planks: 0, IronIngot: 0, Steel: 0, SimpleSpear: 0, Horse: 0, GoldOre: 0, GoldIngot: 0, Horses: 0, Captives: 0, Villager: 0
+                Coal: 0, Planks: 0, IronIngot: 0, Steel: 0, Horse: 0, Horses: 0, Captives: 0, Villager: 0
             },
             salvagePool: {},
             population: 30,
@@ -56,12 +55,12 @@ function inject() {
                 Storehouse: 2,
                 Barracks: 2,
                 Farmhouse: 5,
-                Sawpit: 0, Bloomery: 0, Library: 0, Watchtower: 0, ArcheryRange: 0, SiegeWorkshop: 0, CharcoalKiln: 0, Tenements: 0, University: 0, SteelWorks: 0, UrbanDistrict: 0, GoldShaft: 0, RoyalMint: 0, CitadelWatch: 0, Stable: 0
+                Sawpit: 0, Bloomery: 0, Library: 0, Watchtower: 0, ArcheryRange: 0, SiegeWorkshop: 0, CharcoalKiln: 0, University: 0, SteelWorks: 0, UrbanDistrict: 0, CitadelWatch: 0, Stable: 0
             },
             units: {
                 Villager: 30,
                 Militia: 100,
-                Spearmen: 0, Knights: 0, Trebuchet: 0, TradeCart: 1, Scout: 0, ManAtArms: 0, ImperialGuard: 0, Archer: 0, SupplyWagon: 0, Mangonel: 0, Spy: 0, Scholar: 0
+                Spearmen: 0, Knights: 0, Trebuchet: 0, CargoWagon: 1, Scout: 0, ManAtArms: 0, ImperialGuard: 0, Archer: 0, LargeCargoWagon: 0, Mangonel: 0, Spy: 0, Scholar: 0
             },
             assignments: {
                 LoggingCamp: 10,
