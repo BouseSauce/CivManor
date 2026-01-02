@@ -1,5 +1,6 @@
 import { FOOD_SUSTENANCE_VALUES } from '../config/food.js';
 import { WORLD_CONFIG } from '../config/worlds.js';
+import { ResourceEnum } from '../constants/enums.js';
 
 // Population growth multiplier: can be tuned via WORLD_CONFIG.popGrowth or env var POP_MULT
 export const POP_GROWTH_MULTIPLIER = (WORLD_CONFIG && typeof WORLD_CONFIG.popGrowth === 'number') ? WORLD_CONFIG.popGrowth : ((typeof process !== 'undefined' && process.env.POP_MULT) ? Number(process.env.POP_MULT) : 5.0);
@@ -220,14 +221,56 @@ export function processPopulationTick(pop, foodStocks, approval, townHallLevel =
             newPop = housingCap;
         }
 
+    // 4. Captive Conversion Logic
+    let captivesConverted = 0;
+    try {
+        if (stateObj && stateObj.techLevels && captives > 0) {
+            const integrationLvl = stateObj.techLevels['Captive Integration'] || 0;
+            if (integrationLvl > 0) {
+                // Rate: integrationLvl captives per hour
+                const conversionRatePerHour = integrationLvl;
+                const potentialConversion = conversionRatePerHour * (seconds / 3600);
+                
+                // Accumulate fractional conversion
+                let convRemainder = stateObj._captiveConvRemainder || 0;
+                const totalConv = convRemainder + potentialConversion;
+                let toConvert = Math.floor(totalConv);
+                stateObj._captiveConvRemainder = totalConv - toConvert;
+                
+                if (toConvert > 0) {
+                    toConvert = Math.min(toConvert, captives);
+                    const foodCostPerCaptive = 500; // 10x a hypothetical 50 food cost
+                    const totalFoodCost = toConvert * foodCostPerCaptive;
+                    
+                    // Check if we have enough food in stocks
+                    const currentFood = foodStocks[ResourceEnum.Food] || 0;
+                    
+                    if (currentFood >= totalFoodCost) {
+                        captivesConverted = toConvert;
+                        // Deduct food by adding to consumedFood
+                        consumedFood[ResourceEnum.Food] = (consumedFood[ResourceEnum.Food] || 0) + totalFoodCost;
+                        // Add to population
+                        newPop += captivesConverted;
+                    }
+                }
+            }
+        }
+    } catch (e) { /* ignore */ }
+
     // Captive morbidity: 2% death per hour (reduced by tech elsewhere)
-    const captiveDeaths = Math.floor(captives * 0.02 * (seconds / 3600));
+    let captiveDeaths = Math.floor(captives * 0.02 * (seconds / 3600));
+    
+    // Ensure we don't kill more than we have left after conversion
+    captiveDeaths = Math.min(captiveDeaths, Math.max(0, captives - captivesConverted));
+    
+    // Total captives removed = deaths + converted
+    const totalCaptivesRemoved = captiveDeaths + captivesConverted;
 
     return {
         newPop,
         consumedFood,
         starvationDeaths,
-        captiveDeaths,
+        captiveDeaths: totalCaptivesRemoved,
         growthPerHour
     };
 }

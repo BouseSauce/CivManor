@@ -56,6 +56,10 @@ export default function CoreBuildingCard({ b, onOpen, onAssign, onUpgrade, area,
     // --- Upgrade Logic ---
     const nextLevelCost = computeTotalLevelCost(b.id, level + 1) || {};
     const canAffordUpgrade = Object.entries(nextLevelCost).every(([r, amt]) => (area?.resources?.[r] || 0) >= amt);
+    
+    const buildingQueue = (area?.queue || []).filter(q => q.type === 'Building');
+    const isQueueFull = buildingQueue.length >= 3;
+
     const estTime = calculateBuildTime(b.id, level);
         const estTimeStr = estTime < 60 ? `${estTime}s` : estTime < 3600 ? `${Math.floor(estTime/60)}m` : `${Math.floor(estTime/3600)}h`;
 
@@ -76,7 +80,9 @@ export default function CoreBuildingCard({ b, onOpen, onAssign, onUpgrade, area,
                     <div style={{ color: '#ffd700', fontWeight: 'bold', fontSize: '1.1rem', fontFamily: "'MedievalSharp', serif" }}>
                         {displayName} <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Lvl {level}</span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#aaa' }}>Settlement Core</div>
+                    <div style={{ fontSize: '0.75rem', color: '#aaa' }}>
+                        {config.comingSoon ? (<span style={{ color: '#ffcc80', fontWeight: 800 }}>Coming soon</span>) : 'Settlement Core'}
+                    </div>
                 </div>
             </div>
 
@@ -124,45 +130,66 @@ export default function CoreBuildingCard({ b, onOpen, onAssign, onUpgrade, area,
                         Upgrading... {Math.floor(b.progress || 0)}%
                     </div>
                 </div>
+            ) : b.isQueued ? (
+                <div style={{ 
+                    marginTop: 'auto', 
+                    background: 'rgba(255,215,0,0.1)', 
+                    borderRadius: '4px', 
+                    height: '42px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    border: '1px dashed #ffd700',
+                    color: '#ffd700',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold'
+                }}>
+                    <i className="fa-solid fa-clock-rotate-left" style={{ marginRight: '8px' }}></i>
+                    Queued
+                </div>
             ) : (
                 !readOnly && (
                     <button 
                         onClick={(e) => { e.stopPropagation(); onUpgrade(b.id); }}
-                        disabled={!canAffordUpgrade}
+                        disabled={!canAffordUpgrade || isQueueFull}
                         style={{
                             marginTop: 'auto',
                             width: '100%',
                             padding: '6px',
-                            background: canAffordUpgrade ? 'linear-gradient(to bottom, #4e342e, #3e2723)' : '#3e2723',
-                            border: canAffordUpgrade ? '1px solid #ffd700' : '1px solid #5c4033',
+                            background: (canAffordUpgrade && !isQueueFull) ? 'linear-gradient(to bottom, #4e342e, #3e2723)' : '#3e2723',
+                            border: (canAffordUpgrade && !isQueueFull) ? '1px solid #ffd700' : '1px solid #5c4033',
                             borderRadius: '4px',
-                            color: canAffordUpgrade ? '#ffd700' : '#8d6e63',
+                            color: (canAffordUpgrade && !isQueueFull) ? '#ffd700' : '#8d6e63',
                             fontWeight: 'bold',
-                            cursor: canAffordUpgrade ? 'pointer' : 'not-allowed',
-                            opacity: canAffordUpgrade ? 1 : 0.9,
+                            cursor: (canAffordUpgrade && !isQueueFull) ? 'pointer' : 'not-allowed',
+                            opacity: (canAffordUpgrade && !isQueueFull) ? 1 : 0.9,
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
                             justifyContent: 'center',
                             gap: '2px',
                             minHeight: '42px',
-                            boxShadow: canAffordUpgrade ? '0 0 10px rgba(255, 215, 0, 0.2)' : 'none'
+                            boxShadow: (canAffordUpgrade && !isQueueFull) ? '0 0 10px rgba(255, 215, 0, 0.2)' : 'none'
                         }}
                     >
-                        <div style={{ fontSize: '0.85rem' }}>Upgrade ({estTimeStr})</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', fontSize: '0.75rem' }}>
-                            {Object.entries(nextLevelCost).map(([res, amt]) => {
-                                const iconDef = getIconForResource(res);
-                                const userHas = (area?.resources?.[res] || 0);
-                                const isMissing = userHas < amt;
-                                return (
-                                    <span key={res} style={{ display: 'flex', alignItems: 'center', gap: '3px', color: (!canAffordUpgrade && isMissing) ? '#ff5252' : 'inherit' }}>
-                                        <i className={`fa-solid ${iconDef.icon}`} style={{ fontSize: '0.7rem' }}></i>
-                                        <span>{amt.toLocaleString()}</span>
-                                    </span>
-                                );
-                            })}
+                        <div style={{ fontSize: '0.85rem' }}>
+                            {isQueueFull ? 'Queue Full (Max 3)' : `Upgrade (${estTimeStr})`}
                         </div>
+                        {!isQueueFull && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', fontSize: '0.75rem' }}>
+                                {Object.entries(nextLevelCost).map(([res, amt]) => {
+                                    const iconDef = getIconForResource(res);
+                                    const userHas = (area?.resources?.[res] || 0);
+                                    const isMissing = userHas < amt;
+                                    return (
+                                        <span key={res} style={{ display: 'flex', alignItems: 'center', gap: '3px', color: (!canAffordUpgrade && isMissing) ? '#ff5252' : 'inherit' }}>
+                                            <i className={`fa-solid ${iconDef.icon}`} style={{ fontSize: '0.7rem' }}></i>
+                                            <span>{amt.toLocaleString()}</span>
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </button>
                 )
             )}

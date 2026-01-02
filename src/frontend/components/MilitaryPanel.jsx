@@ -52,8 +52,8 @@ export default function MilitaryPanel({ units, buildings, queue = [], onRecruit,
   };
 
   const unitQueue = (queue || []).filter(it => it.type === 'Unit');
-  // Frontend local limit for queue UI disabling (keeps in sync with server default of 5)
-  const QUEUE_LIMIT = 5;
+  // Frontend local limit for queue UI disabling (keeps in sync with server default of 3)
+  const QUEUE_LIMIT = 3;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -261,30 +261,37 @@ export default function MilitaryPanel({ units, buildings, queue = [], onRecruit,
                   </div>
 
                   {!readOnly && !isLocked && (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
-                      <input 
-                        type="number" 
-                        min="0"
-                        value={count}
-                        onChange={(e) => handleRecruitChange(unit.id, e.target.value)}
-                        style={{ 
-                          width: 60, 
-                          background: 'rgba(0,0,0,0.3)', 
-                          border: '1px solid var(--wood-dark)', 
-                          color: 'white',
-                          padding: '4px 8px',
-                          borderRadius: 4
-                        }}
-                        disabled={unitQueue.length >= QUEUE_LIMIT}
-                      />
-                      <button 
-                        className="btn btn-primary"
-                        style={{ flex: 1, padding: '4px 12px' }}
-                        onClick={() => handleRecruit(unit.id)}
-                        disabled={count <= 0 || unitQueue.length >= QUEUE_LIMIT}
-                      >
-                        Train
-                      </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto' }}>
+                      {unitQueue.length >= QUEUE_LIMIT && (
+                        <div style={{ fontSize: '0.7rem', color: '#ff5252', textAlign: 'center', fontWeight: 'bold' }}>
+                          Queue Full (Max {QUEUE_LIMIT})
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input 
+                          type="number" 
+                          min="0"
+                          value={count}
+                          onChange={(e) => handleRecruitChange(unit.id, e.target.value)}
+                          style={{ 
+                            width: 60, 
+                            background: 'rgba(0,0,0,0.3)', 
+                            border: '1px solid var(--wood-dark)', 
+                            color: 'white',
+                            padding: '4px 8px',
+                            borderRadius: 4
+                          }}
+                          disabled={unitQueue.length >= QUEUE_LIMIT}
+                        />
+                        <button 
+                          className="btn btn-primary"
+                          style={{ flex: 1, padding: '4px 12px' }}
+                          onClick={() => handleRecruit(unit.id)}
+                          disabled={count <= 0 || unitQueue.length >= QUEUE_LIMIT}
+                        >
+                          Train
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

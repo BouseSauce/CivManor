@@ -49,12 +49,15 @@ const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssi
         // Progressive Disclosure disabled: show canonical list of all buildings
         const isVisible = true;
 
+        // If the config explicitly marks a building as comingSoon, treat it as locked by default
+        const defaultLocked = !!cfg.comingSoon;
+
         return {
             id,
             name: cfg.name || provided.name || id,
             displayName: provided.displayName || cfg.displayName || cfg.name || id,
             level: typeof provided.level === 'number' ? provided.level : (provided.level || 0),
-            isLocked: typeof provided.isLocked === 'boolean' ? provided.isLocked : (provided.isLocked || false),
+            isLocked: typeof provided.isLocked === 'boolean' ? provided.isLocked : (defaultLocked || (provided.isLocked || false)),
             isUpgrading: provided.isUpgrading || false,
             isQueued: provided.isQueued || false,
             assigned: typeof provided.assigned === 'number' ? provided.assigned : (provided.assigned || 0),
@@ -124,8 +127,30 @@ const ManagementPanel = ({ area = null, buildings, queue = [], onUpgrade, onAssi
 
     // Sort: Unlocked first, then constructed, then by name
     // Mark queued buildings
-    const queuedIds = (queue || []).map(q => q.id || q.buildingId || q.name).filter(Boolean);
-    const enriched = filteredBuildings.map(b => ({ ...b, isQueued: queuedIds.includes(b.id) }));
+    const buildingQueue = (queue || []).filter(q => q.type === 'Building');
+    const activeBuildingId = buildingQueue.length > 0 ? buildingQueue[0].id : null;
+    const queuedIds = buildingQueue.map(q => q.id || q.buildingId || q.name).filter(Boolean);
+    
+    const enriched = filteredBuildings.map(b => {
+        const isUpgrading = b.id === activeBuildingId;
+        const isQueued = queuedIds.includes(b.id);
+        
+        // Calculate progress if upgrading
+        let progress = 0;
+        if (isUpgrading) {
+            const item = buildingQueue[0];
+            const total = item.totalTicks || item.totalTime || 1;
+            const remaining = (typeof item.ticksRemaining !== 'undefined') ? item.ticksRemaining : (item.timeRemaining || 0);
+            progress = Math.max(0, Math.min(100, Math.floor(((total - remaining) / total) * 100)));
+        }
+
+        return { 
+            ...b, 
+            isUpgrading, 
+            isQueued,
+            progress
+        };
+    });
 
     const sortedBuildings = [...enriched].sort((a, b) => {
         // Grouping: built (level>0) -> buildable (level===0 && unlocked) -> locked

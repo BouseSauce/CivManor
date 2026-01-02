@@ -64,6 +64,16 @@ export const RESEARCH_DEFS = {
             durationSeconds: 3600,
             requirement: { tech: 'Bureaucracy', level: 10, building: 'TownHall', level: 5 },
             type: 'One-Off'
+        },
+        'Captive Integration': {
+            id: 'Captive Integration',
+            name: 'Captive Integration',
+            description: 'Allows converting Captives into Villagers. Each level increases conversion rate. Costs 500 Food per captive.',
+            baseCost: { [ResourceEnum.Food]: 2000, [ResourceEnum.Knowledge]: 500 },
+            growthFactor: 1.8,
+            requirement: { tech: 'Bureaucracy', level: 5 },
+            type: 'Infinite',
+            maxLevel: 10
         }
     },
 

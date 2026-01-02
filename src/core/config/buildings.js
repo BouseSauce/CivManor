@@ -72,6 +72,19 @@ export const BUILDING_CONFIG = {
         requirement: null
     },
 
+    Market: {
+        id: 'Market', name: 'Market', displayName: 'Market', tier: 2,
+        category: 'Economy',
+        tags: ['economy', 'commerce'],
+        description: 'Coming soon',
+        comingSoon: true,
+        growthFactor: 1.6,
+        baseCost: { [ResourceEnum.Timber]: 2000, [ResourceEnum.Stone]: 1000 },
+        workforceCap: 0,
+        baseOutput: { special: 'Market trading center (coming soon)' },
+        requirement: { quest: 'Market_Not_Released' }
+    },
+
     Barracks: {
         id: 'Barracks', name: 'Barracks', displayName: 'Barracks', tier: 1,
         category: 'Military',

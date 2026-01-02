@@ -17,9 +17,9 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
   useEffect(() => {
     // Initialize seconds map from incoming queue
     const next = {};
-    // use a stable identity key (no index) so timers follow items even if array order changes
-    (queue || []).forEach((item) => {
-      const key = `${item.areaId || item.areaName || ''}:${item.type}:${item.id || item.name}`;
+    // use a stable identity key (including index) so timers follow items even if array order changes
+    (queue || []).forEach((item, index) => {
+      const key = `${item.areaId || item.areaName || parentAreaId || ''}:${item.type}:${item.id || item.name}:${index}`;
       // look for common time fields
       const secs = parseSeconds(item.secondsRemaining) ?? parseSeconds(item.timeRemainingSeconds) ?? parseSeconds(item.timeRemaining) ?? parseSeconds(item.seconds) ?? parseSeconds(item.ticksRemaining);
       next[key] = secs;
@@ -32,22 +32,44 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
       setSecondsMap(prev => {
         const next = { ...prev };
         let changed = false;
+
+        // Identify active items per area (sequential processing for Buildings/Units)
+        // Research is independent and always progresses.
+        const activeKeys = new Set();
+        const areaProcessed = new Set();
+
+        (queue || []).forEach((item, index) => {
+          const key = `${item.areaId || item.areaName || parentAreaId || ''}:${item.type}:${item.id || item.name}:${index}`;
+          if (item.type === 'Research') {
+            activeKeys.add(key);
+          } else {
+            const areaId = item.areaId || item.areaName || parentAreaId || 'default';
+            if (!areaProcessed.has(areaId)) {
+              activeKeys.add(key);
+              areaProcessed.add(areaId);
+            }
+          }
+        });
+
         Object.keys(next).forEach(k => {
           if (next[k] == null) return;
-          if (next[k] > 0) { next[k] = next[k] - 1; changed = true; }
+          if (activeKeys.has(k) && next[k] > 0) { 
+            next[k] = next[k] - 1; 
+            changed = true; 
+          }
         });
         return changed ? next : prev;
       });
     }, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [queue]);
 
   // When an item reaches 0 seconds or 100% progress, trigger a single refresh to sync with server
   useEffect(() => {
     if (!onRefresh) return;
     let triggered = false;
-    (queue || []).forEach((item) => {
-      const key = `${item.areaId || item.areaName || ''}:${item.type}:${item.id || item.name}`;
+    (queue || []).forEach((item, index) => {
+      const key = `${item.areaId || item.areaName || parentAreaId || ''}:${item.type}:${item.id || item.name}:${index}`;
       const secs = (typeof secondsMap[key] !== 'undefined' && secondsMap[key] !== null)
         ? secondsMap[key]
         : (parseSeconds(item.secondsRemaining) ?? parseSeconds(item.timeRemainingSeconds) ?? parseSeconds(item.timeRemaining) ?? parseSeconds(item.seconds));
@@ -77,25 +99,42 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
   const visibleQueue = (() => {
     const seen = new Set();
     const out = [];
-    (queue || []).forEach((item) => {
-      const k = `${item.areaId || item.areaName || ''}:${item.type}:${item.id || item.name}`;
-      if (seen.has(k)) return;
-      seen.add(k);
+    const areaProcessed = new Set();
+
+    (queue || []).forEach((item, index) => {
+      // Use index in key to allow multiple upgrades of same building type in queue
+      const k = `${item.areaId || item.areaName || parentAreaId || ''}:${item.type}:${item.id || item.name}:${index}`;
+      
       const secs = (typeof secondsMap[k] !== 'undefined' && secondsMap[k] !== null)
         ? secondsMap[k]
         : (parseSeconds(item.secondsRemaining) ?? parseSeconds(item.timeRemainingSeconds) ?? parseSeconds(item.timeRemaining) ?? parseSeconds(item.seconds) ?? parseSeconds(item.ticksRemaining));
+      
       const prog = (typeof item.totalTime === 'number' && secs != null)
         ? Math.max(0, Math.min(100, Math.floor(((item.totalTime - secs) / item.totalTime) * 100)))
         : (item.progress || 0);
+
       if ((secs === 0 && secs !== null) || prog >= 100) return;
-      out.push(Object.assign({}, item, { __secs: secs, __prog: prog, __key: k }));
+
+      // Determine if this item is active in its area (sequential processing)
+      let isActive = false;
+      if (item.type === 'Research') {
+        isActive = true;
+      } else {
+        const areaId = item.areaId || item.areaName || parentAreaId || 'default';
+        if (!areaProcessed.has(areaId)) {
+          isActive = true;
+          areaProcessed.add(areaId);
+        }
+      }
+
+      out.push(Object.assign({}, item, { __secs: secs, __prog: prog, __key: k, __isActive: isActive }));
     });
     return out;
   })();
 
   return (
-    <div className="beveled-panel" style={{ marginBottom: '12px', padding: '12px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div className="beveled-panel" style={{ marginBottom: '12px', padding: '12px', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'row', gap: '12px', minWidth: 'max-content' }}>
         {(!visibleQueue || visibleQueue.length === 0) ? (
           <div className="font-garamond" style={{ color: '#aaa', fontStyle: 'italic' }}>Nothing is currently in progress.</div>
         ) : (
@@ -104,6 +143,7 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
             const secs = item.__secs;
             const prog = item.__prog;
             const isResearch = item.type === 'Research';
+            const isActive = item.__isActive;
             return (
               <div
                 key={key}
@@ -111,45 +151,80 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
                 className="standard-card"
                 style={{ 
                     display: 'flex', 
+                    flexDirection: 'column',
                     justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    gap: '12px', 
+                    alignItems: 'flex-start', 
+                    gap: '8px', 
                     cursor: onItemClick ? 'pointer' : 'default',
-                    padding: '8px 12px',
-                    background: 'rgba(0,0,0,0.2)',
-                    borderLeft: isResearch ? '4px solid #aaffaa' : '4px solid var(--accent-gold)'
+                    padding: '10px 14px',
+                    background: isActive ? 'rgba(255,215,0,0.05)' : 'rgba(0,0,0,0.3)',
+                    borderLeft: isResearch ? '4px solid #aaffaa' : '4px solid var(--accent-gold)',
+                    borderTop: isActive ? '1px solid rgba(255,215,0,0.2)' : '1px solid transparent',
+                    width: '220px',
+                    flexShrink: 0,
+                    position: 'relative',
+                    boxShadow: isActive ? '0 0 15px rgba(255,215,0,0.1)' : 'none'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-                  <div style={{ width: '32px', textAlign: 'center' }}>
+                {isActive && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-8px', 
+                    right: '10px', 
+                    background: 'var(--accent-gold)', 
+                    color: '#000', 
+                    fontSize: '0.65rem', 
+                    padding: '2px 6px', 
+                    borderRadius: '4px',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase'
+                  }}>
+                    Active
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
+                  <div style={{ width: '24px', textAlign: 'center' }}>
                     <i className={`fa-solid ${isResearch ? 'fa-flask' : (item.type === 'Unit' ? 'fa-person-military-pointing' : 'fa-hammer')}`} 
-                       style={{ color: isResearch ? '#aaffaa' : 'var(--accent-gold)', fontSize: '1.2rem' }}></i>
+                       style={{ color: isResearch ? '#aaffaa' : 'var(--accent-gold)', fontSize: '1.1rem' }}></i>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <div className="font-cinzel" style={{ fontWeight: 700, color: '#e0cda0', fontSize: '0.95em' }}>
-                      {item.name || item.id}{item.areaName ? ` — ${item.areaName}` : ''}
+                  <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <div className="font-cinzel" style={{ fontWeight: 700, color: '#e0cda0', fontSize: '0.85em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {item.name || item.id}
                     </div>
-                    <div className="font-garamond" style={{ fontSize: '0.9rem', color: '#ccc' }}>
-                      {item.type} {item.count ? `— ${item.count}x` : ''} {secs != null ? `— ${humanTime(secs)} remaining` : ''}
+                    <div className="font-garamond" style={{ fontSize: '0.8rem', color: '#ccc' }}>
+                      {item.type} {item.count ? `(${item.count}x)` : ''}
                     </div>
                   </div>
                 </div>
                 
-                <div style={{ width: '140px' }}>
-                  <div className="progress-bar-bg" style={{ height: '8px', background: '#222', border: '1px solid #444', borderRadius: '4px' }}>
-                    <div className="progress-bar-fill" style={{ 
-                        width: `${prog}%`, 
-                        backgroundColor: isResearch ? '#4caf50' : 'var(--accent-green)', 
-                        height: '100%',
-                        borderRadius: '3px'
-                    }} />
-                  </div>
-                  <div className="font-garamond" style={{ fontSize: '0.8rem', color: '#bbb', textAlign: 'right', marginTop: '4px' }}>{prog}%</div>
+                <div style={{ width: '100%' }}>
+                  {!isActive ? (
+                    <div className="font-garamond" style={{ fontSize: '0.8rem', color: '#888', fontStyle: 'italic', textAlign: 'center', padding: '8px 0', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
+                      <i className="fa-solid fa-clock-rotate-left" style={{ marginRight: '6px', opacity: 0.6 }}></i>
+                      Queued
+                    </div>
+                  ) : (
+                    <>
+                      <div className="progress-bar-bg" style={{ height: '6px', background: '#111', border: '1px solid #333', borderRadius: '3px' }}>
+                        <div className="progress-bar-fill" style={{ 
+                            width: `${prog}%`, 
+                            backgroundColor: isResearch ? '#4caf50' : 'var(--accent-green)', 
+                            height: '100%',
+                            borderRadius: '2px',
+                            transition: 'width 0.5s ease-out'
+                        }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                        <div className="font-garamond" style={{ fontSize: '0.75rem', color: '#999' }}>{secs != null ? humanTime(secs) : ''}</div>
+                        <div className="font-garamond" style={{ fontSize: '0.75rem', color: '#bbb' }}>{prog}%</div>
+                      </div>
+                    </>
+                  )}
                 </div>
                 
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', width: '100%', justifyContent: 'flex-end' }}>
                   {(item.type === 'Unit' || item.type === 'Building') && (
-                    <button className="btn-primary font-cinzel" style={{ fontSize: '0.8em', padding: '4px 8px', background: '#8b0000', borderColor: '#500' }} onClick={async (e) => {
+                    <button className="btn-primary font-cinzel" style={{ fontSize: '0.7em', padding: '2px 6px', background: '#8b0000', borderColor: '#500', minHeight: 'auto' }} onClick={async (e) => {
                       e.stopPropagation();
                       const areaId = item.areaId || parentAreaId || null;
                       if (!areaId) { alert('Area context required to cancel this item'); return; }
@@ -158,7 +233,6 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
                         const resp = await GameClient.cancelUpgrade(areaId, item.id || item.name, item.type);
                         if (resp && resp.success) {
                           if (typeof onRefresh === 'function') onRefresh();
-                          alert('Cancelled. Resources refunded.');
                         } else {
                           alert((resp && resp.error) || 'Failed to cancel item');
                         }
@@ -174,7 +248,6 @@ export default function QueuePanel({ queue = [], onRefresh, onItemClick, parentA
           })
         )}
       </div>
-      {/* footer removed: manual Refresh button removed per UX request */}
     </div>
   );
 }

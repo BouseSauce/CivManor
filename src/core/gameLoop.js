@@ -455,8 +455,8 @@ export function processTick(state, seconds = 1, ctx = {}) {
         
         // Initialize ticksRemaining if missing (migration/safety)
         if (typeof item.ticksRemaining === 'undefined') {
-             // Fallback: try to estimate from completesAt or just set to 1 to finish quickly
-             item.ticksRemaining = 1;
+             // Fallback: try to use timeRemaining or totalTime before defaulting to 1
+             item.ticksRemaining = item.timeRemaining ?? item.totalTime ?? item.totalTicks ?? 1;
         }
 
         item.ticksRemaining -= (seconds || 1); // seconds here is actually ticks passed
@@ -601,6 +601,12 @@ for (let i = 0; i < 5; i++) {
 export function startConstruction(state, buildingId) {
     const config = BUILDING_CONFIG[buildingId];
     if (!config) return { success: false, message: "Invalid Building" };
+
+    // Enforce Queue Limit: Max 3 items in the building queue (including active)
+    const buildingQueue = (state.queue || []).filter(it => it.type === 'Building');
+    if (buildingQueue.length >= 3) {
+        return { success: false, message: "Building queue is full (max 3)" };
+    }
 
     const currentLevel = state.buildings[buildingId] || 0;
     const cost = calculateUpgradeCost(buildingId, currentLevel);

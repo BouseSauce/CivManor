@@ -423,7 +423,7 @@ let TICK_NUMBER = 0;
 // independent pacing. Fall back to the global GAME_CONFIG value.
 const TICK_MS = (WORLD_CONFIG && typeof WORLD_CONFIG.tickMs === 'number') ? WORLD_CONFIG.tickMs : GAME_CONFIG.TICK_MS;
 // Configurable limits (expose via /api/config)
-const MAX_UNIT_QUEUE = parseInt(process.env.MAX_UNIT_QUEUE || process.env.UNIT_QUEUE_MAX || '5', 10) || 5;
+const MAX_UNIT_QUEUE = parseInt(process.env.MAX_UNIT_QUEUE || process.env.UNIT_QUEUE_MAX || '3', 10) || 3;
 // Load persisted state (if any) then start tick loop
 loadGameState().then(() => {
     // If no explicit world data was loaded, build a minimal world from persisted `areaStates`.
@@ -3200,8 +3200,8 @@ app.post('/api/area/:areaId/recruit', async (req, res) => {
     }
 
     // Allow up to N queued unit training items per area (sequential processing)
-    // Configurable via env var MAX_UNIT_QUEUE or UNIT_QUEUE_MAX (defaults to 5)
-    const MAX_UNIT_QUEUE = parseInt(process.env.MAX_UNIT_QUEUE || process.env.UNIT_QUEUE_MAX || '5', 10) || 5;
+    // Configurable via env var MAX_UNIT_QUEUE or UNIT_QUEUE_MAX (defaults to 3)
+    const MAX_UNIT_QUEUE = parseInt(process.env.MAX_UNIT_QUEUE || process.env.UNIT_QUEUE_MAX || '3', 10) || 3;
     const unitQueueItems = (state.queue || []).filter(it => it && it.type === 'Unit');
     if (unitQueueItems.length >= MAX_UNIT_QUEUE) {
         console.log(`Recruit Failed: Unit training queue full in area ${areaId} (max ${MAX_UNIT_QUEUE})`);
